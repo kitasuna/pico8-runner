@@ -4,45 +4,61 @@ __lua__
 -- venusian botanist
 map_x = 0
 diff = {0, 0}
-ground_y = 48
+ground_y = 80
+GROUND_Y = 80 -- switch to this eventually
 
-player_base_sprite = 5
-
-sprite_speed = 1
 scroll_speed = 1
 speed_mult = 2
 
 player = {}
+st_game = {}
+st_player = {}
+st_ability = {}
+--[[
+  GameState :: {
+    distance :: { meters :: Int, kilometers :: Int },
+    dist_thresh :: Int,
+    global_cooldown :: Int,
+    lock_input :: Int, -- for holding menu screen
+    flowers :: [],
+    fires :: [],
+    comets :: [],
+    current_level :: Int,
+    current_level_idx :: Int,
+  }
+]]--
+#include const.lua
+#include player.lua
 game_state = {
   distance = { meters = 0, kilometers = 0},
+  global_cooldown = 0,
+  lock_input = 0,
   dist_thresh = 256,
   flowers = {},
-  obstacles = {}
-}
-
-levels = {
-  {
-    num = 0,
-    goal = 5
-  },
-  {
-    num = 1,
-    goal = 20
+  baddies = {},
+  current_level = {},
+  current_level_idx = 1,
+  levels = {
+    {
+      num = 0,
+      goal = 5
+    },
+    {
+      num = 1,
+      goal = 20
+    }
   }
 }
 
+
 scrn = {}
 
-current_level = {}
-current_level_idx = 1
-
-global_cooldown = 0
 
 _debug = true
 
-#include const.lua
 #include helper.lua
 #include init.lua
+#include menus.lua
 
 function _update()
   scrn.upd()
@@ -52,14 +68,12 @@ function _draw()
   scrn.drw()
 end
 
-#include menus.lua
-
 function gen_update(gen, gs)
   if (gen.cooldown > 0) then
     gen.cooldown -= 1
   end
 
-  if(global_cooldown > 0) then
+  if(gs.global_cooldown > 0) then
     return gen
   end
 
@@ -68,13 +82,12 @@ function gen_update(gen, gs)
       gen.emit(gen.target)
       
       local buff = flr(gen.sprite_width / speed_mult) + 1 -- adding one for kicks
-      global_cooldown = buff
+      gs.global_cooldown = buff
 
       -- Reset cooldown
       local nxt = flr(rnd(gen.cooldown_max - gen.cooldown_min))
 
-
-      -- Max width of obstacles (consecutive sprites, in this case)
+      -- Max width of fires (consecutive sprites, in this case)
       local f0 = gs.distance.kilometers > 1 and 1 or 0
       local f1 = gs.distance.kilometers > 3 and 1 or 0
       local max_width = 1 + f0 + f1
@@ -134,6 +147,40 @@ function calc_distance(mkm, thresh)
   return mkm
 end
 
+
+-- Player -> Player
+--function jump(player)
+--    local G = 0.4
+--    local addlG = 1
+--    local v0 = -4.4
+--    local ground_y = GROUND_Y
+--
+--    if(player.y == ground_y) then
+--      player.vel_y = v0
+--    elseif(btn(BTN_A) == false) then
+--      addlG = 3
+--    end
+--
+--    -- Decelerate player
+--    player.vel_y += G * addlG
+--
+--    return player
+--end
+
+
+function upd_player_pos(player)
+  player.y += player.vel_y
+
+  if(player.y >= ground_y) then
+    player.y = ground_y
+    player.vel_y = 0
+    current_player_abil = base -- MIGHT need to remove this later...
+    add(st_ability, { type = 'RESET_STATE', payload = 'jump'})
+  end
+
+  return player
+end
+
 function upd_game()
   -- Scroll map
   map_x = shift_map(map_x , scroll_speed * speed_mult)
@@ -143,49 +190,50 @@ function upd_game()
 
   -- Update sprite pos
   foreach(game_state.flowers, shift_sprite)
-  foreach(game_state.obstacles, shift_sprite)
+  foreach(game_state.baddies, shift_sprite)
 
   -- Remove sprite if necessary
   game_state.flowers = drop_offscreen(game_state.flowers)
-  game_state.obstacles = drop_offscreen(game_state.obstacles)
+  game_state.baddies = drop_offscreen(game_state.baddies)
 
   -- Check flower collision
   foreach(game_state.flowers, bb_coll(game_state.flowers, player, add_p_score(player)))
 
   -- Check obstacle collision
-  foreach(game_state.obstacles, bb_coll(game_state.obstacles, player, kill_p(player)))
+  foreach(game_state.baddies, bb_coll(game_state.baddies, player, kill_p(player)))
   
   -- Update global cooldown (spaces out sprites)
-  if(global_cooldown > 0) then global_cooldown -=1 end
+  if(game_state.global_cooldown > 0) then game_state.global_cooldown -=1 end
 
   -- Update the generators
   fl_gen = gen_update(fl_gen, game_state)
-  obs_gen = gen_update(obs_gen, game_state)
+  fire_gen = gen_update(fire_gen, game_state)
+  comet_gen = gen_update(comet_gen, game_state)
 
-  local G = 0.4
-  local v0 = -4.0
-
-  if(player.y == ground_y and btnp(BTN_A)) then -- initial press
-    player.btn_length = 0
-    player.btn_freeze = false
-    player.vel_y = v0
-    player.y += player.vel_y
-  elseif(player.y != ground_y and player.btn_freeze == false and btn(BTN_A)) then -- holding
-    player.btn_length += 1
-    player.y += player.vel_y
-    player.vel_y += G
-  elseif(player.y != ground_y and player.btn_freeze == false) then -- release
-    player.btn_freeze = true
-    player.y += player.vel_y
-    player.vel_y += G
-  elseif(player.y != ground_y) then -- released
-    player.y += player.vel_y
-    player.vel_y += G * 3
+  -- Kinda feel like stream-y stuff should go around here...
+  local abil
+  if(btnp(BTN_A)) then
+    abil = get_by_key(BTN_A)
+    current_player_abil = abil
+    add(st_ability, { type = 'NEXT_STATE', payload = abil.name }) -- TODO: Eventually this will push an EXEC to st_ability, rather than to st_player
+    add(st_player, { type = 'EXEC', payload = abil })
   end
 
-  if(player.y >= ground_y) then
-    player.y = ground_y
-    player.vel_y = 0
+  current_player_abil.f(player)
+  upd_player_pos(player)
+
+  -- Fastfall if available
+  --if(player.y != ground_y and btnp(BTN_D) and abilities.fastfall.enabled == true) then
+  --  player.y = ground_y
+  --end
+  if(btnp(BTN_D)) then
+    abil = get_by_key(BTN_D)
+    current_player_abil = abil
+    add(st_player, { type = 'EXEC', payload = abil })
+  end
+
+  if(btnp(BTN_B)) then
+    add(st_ability, { type = 'TOGGLE', payload = 'fastfall' } )
   end
 
   -- update player animation
@@ -197,16 +245,66 @@ function upd_game()
     end
   end
 
-  if(player.score >= current_level.goal) then
+  -- TODO: Add event here
+  if(player.score >= game_state.current_level.goal) then
+    game_state.lock_input = 20
+    abilities.fastfall.enabled = true
     scrn.upd = upd_win
     scrn.drw = drw_win
   end
 
   
   if(player.alive != true) then
-    scrn.upd = upd_lose
-    scrn.drw = drw_lose
+    add(st_game, {type = 'DEATH', payload = {}})
   end
+
+  proc_st_game() -- TODO: Maybe eventually this takes / returns game state... mad side-effects though
+  abilities = proc_st_ability(abilities)
+  player = proc_st_player(player)
+end
+
+
+function proc_st_game()
+  for k, v in pairs(st_game) do
+      if(v.type == 'DEATH') then
+        -- foreach(game_state.baddies, sprite_drop(game_state.baddies))
+        drop_all(game_state.baddies)
+        game_state.lock_input = 20
+        scrn.upd = upd_lose
+        scrn.drw = drw_lose
+      end
+  end
+  st_game = {}
+end
+
+-- Ability[] -> Ability[]
+function proc_st_ability(abilities)
+  for k, v in pairs(st_ability) do
+    if(v.type == 'TOGGLE') then
+      abilities[v.payload].enabled = not abilities[v.payload].enabled
+    end
+    if(v.type == 'EXEC') then
+      add(st_player, { type = 'EXEC', payload = abilities[v.payload] })
+    end
+    if(v.type == 'NEXT_STATE') then
+      abilities[v.payload].state += 1
+    end
+    if(v.type == 'RESET_STATE') then
+      abilities[v.payload].state = 0
+    end
+  end
+  st_ability = {}
+  return abilities
+end
+
+function proc_st_player(player)
+  for k, v in pairs(st_player) do
+    if(v.type == 'EXEC') then
+      player.immune = v.payload.immune -- TODO: Concat is more sensible here...
+    end
+  end
+
+  return player
 end
 
 function drw_game()
@@ -217,31 +315,36 @@ function drw_game()
   if(_debug) then
     print("debug mode", 0, 0, 11)
 
-    local flower_len = 0
-    local obs_len = 0
-    -- foreach(game_state.flowers, function(s) flower_len += 1 end)
-    -- foreach(game_state.obstacles, function(s) obs_len += 1 end)
-    print("dudes: "..len(game_state.flowers) + len(game_state.obstacles), 0, 6, CLR_GRN)
-    -- print("m:km "..game_state.distance.meters..":"..game_state.distance.kilometers, 44, 6, CLR_GRN)
-    print("l: "..current_level.num.." g:"..current_level.goal, 0, 14, CLR_GRN)
+    -- Sprite /generator data
     -- print("flcool: "..fl_gen.cooldown, 44, 0, 11)
     -- print("flcmax: "..fl_gen.cooldown_max, 44, 6, 11)
+    print("dudes: "..len(game_state.baddies), 64, 6, CLR_GRN)
+
+    -- Player stats
+    -- print("ab: ", 88, 6, 12)
+    print("FF", 112, 6, abilities.fastfall.enabled and CLR_GRN or CLR_RED)
     -- print("alive: "..tostr(player.alive), 44, 18, 11)
     -- print("p.vy: "..player.vel_y, 88, 6)
-    print("p.BL: "..player.btn_length, 88, 12)
     --print("gcd: "..global_cooldown, 36, 6, 11)
+   
+    -- Game state (score, level, etc)
     print("score: "..player.score, 36, 14, CLR_BLU)
+    print("l: "..game_state.current_level.num.." g:"..game_state.current_level.goal, 0, 14, CLR_GRN)
+    -- print("immune: "..len(player.immune), 0, 21, CLR_GRN)
+    print("jumpst: "..jump.state, 0, 28, CLR_GRN)
+    -- print("flwrs: "..len(game_state.flowers), 0, 28, CLR_GRN)
+    -- print("m:km "..game_state.distance.meters..":"..game_state.distance.kilometers, 44, 6, CLR_GRN)
   end
 
   foreach(game_state.flowers, sprite_draw)
-  foreach(game_state.obstacles, sprite_draw)
+  foreach(game_state.baddies, sprite_draw)
 
   player_draw(player)
 end
 
 
 function shift_sprite(s)
-  s.x -= sprite_speed * speed_mult 
+  s.x -= s.v * speed_mult 
 end
 
 function drop_offscreen(ss)
@@ -256,7 +359,7 @@ end
 
 function drop_all(ss)
   foreach(ss, function(s)
-      return sprite_drop(ss, s)
+    return sprite_drop(ss, s)
   end)
 
   return ss 
@@ -265,8 +368,8 @@ end
 function bb_coll(ss, playerS, cb)
   return function (s1)
     if (
-          playerS.x < s1.x + s1.w 
-      and playerS.x + playerS.w > s1.x
+          playerS.x < (s1.x + s1.buff_w) + (s1.w - s1.buff_w)
+      and playerS.x + playerS.w > (s1.x + s1.buff_w)
       and playerS.y + playerS.h > s1.y
       and playerS.y < s1.y + s1.h
       ) then
@@ -280,18 +383,6 @@ function sprite_draw(s)
   spr(s.idx, s.x, s.y)
 end
 
-function flower_gen(ss)
-  local s = { x = 128, y = ground_y, idx = 4, w=8, h=8}
-  add(ss, s)
-  return ss
-end
-
-function obstacle_gen(ss)
-  local s = { x = 128, y = ground_y, idx = 7, w=8, h=8}
-  add(ss, s)
-  return ss
-end
-  
 fl_gen = {
   cooldown = 120,
   cooldown_min = 60,
@@ -300,18 +391,41 @@ fl_gen = {
   last_width = 0,
   target = game_state.flowers,
   stacks = false,
-  emit = flower_gen
+  emit = function (ss)
+    local s = { x = 128, y = ground_y, idx = 4, w=8, buff_w = 0, h=8, v=1, type = 'flower'}
+    add(ss, s)
+    return ss
+  end
 }
 
-obs_gen = {
+fire_gen = {
   cooldown = 90,
   cooldown_min = 30,
   cooldown_max = 90,
   sprite_width = 8,
   last_width = 0,
-  target = game_state.obstacles,
+  target = game_state.baddies,
   stacks = true,
-  emit = obstacle_gen
+  emit = function (ss)
+    local s = { x = 128, y = GROUND_Y, idx = 7, w=6, buff_w = 0, h=5, v=1, type = 'fire'}
+    add(ss, s)
+    return ss
+  end
+}
+
+comet_gen = {
+  cooldown = 150,
+  cooldown_min = 120,
+  cooldown_max = 210,
+  sprite_width = 8,
+  last_width = 0,
+  target = game_state.baddies,
+  stacks = false,
+  emit = function(ss)
+    local s = { x = 128, y = 58, idx = 8, w=6, buff_w=0, h=6, v=2, type = 'comet'}
+    add(ss, s)
+    return ss
+  end
 }
 
 function sprite_drop(ss, s)
@@ -319,18 +433,18 @@ function sprite_drop(ss, s)
 end
 
 function player_draw(p)
-  spr((player_base_sprite + p.frame), p.x, p.y)
+  spr((p.base_sprite + p.frame), p.x, p.y)
 end
 
 __gfx__
 00000000aaaaaaaa4444444440444044000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000aaa4aaaa4044404444440444002220000056600000566000008888000000000000000000000000000000000000000000000000000000000000000000
-00700700aaaaaaaaaaaaaaaaaaaaaaaa022a22000666660006666600088888800000000000000000000000000000000000000000000000000000000000000000
-00077000aaaaaaaaaaaaaaaaaaaaa4aa002220006655858666558586088899800000000000000000000000000000000000000000000000000000000000000000
-00077000aaaaaaaa4aaaaaaaaaaaaaaa000800000666666006666660088999800000000000000000000000000000000000000000000000000000000000000000
-00700700aaaaaaaaaaaaaaaaaaaaaaaa088888000500005050500505889999880000000000000000000000000000000000000000000000000000000000000000
-00000000a4aaaa4aaaaaaa4aaaaa4aaa008880005650056506000060899aa9880000000000000000000000000000000000000000000000000000000000000000
-00000000aaaaaaaaaaaaaaaaaaaaaaaa000800000500005050500505899aa9880000000000000000000000000000000000000000000000000000000000000000
+00000000aaa4aaaa4044404444440444002220000056600000566000088880000000000000000000000000000000000000000000000000000000000000000000
+00700700aaaaaaaaaaaaaaaaaaaaaaaa022a22000666660006666600888888000bb0000000000000000000000000000000000000000000000000000000000000
+00077000aaaaaaaaaaaaaaaaaaaaa4aa00222000665585866655858688898800babbb00000000000000000000000000000000000000000000000000000000000
+00077000aaaaaaaa4aaaaaaaaaaaaaaa00080000066666600666666088999800aaabbbbb00000000000000000000000000000000000000000000000000000000
+00700700aaaaaaaaaaaaaaaaaaaaaaaa08888800050000505050050589999800aaabbbb000000000000000000000000000000000000000000000000000000000
+00000000a4aaaa4aaaaaaa4aaaaa4aaa00888000565005650600006009aa9000babbb00000000000000000000000000000000000000000000000000000000000
+00000000aaaaaaaaaaaaaaaaaaaaaaaa00080000050000505050050500aa00000bb0000000000000000000000000000000000000000000000000000000000000
 __map__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -339,11 +453,11 @@ __map__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0203020302030203020203020302030200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0101010101010101010101010101010100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0101010101010101010101010101010100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0101010101010101010101010101010100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0101010101010101010101010101010100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0202020202020202020202020202020200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0101010101010101010101010101010100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0101010101010101010101010101010100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0101010101010101010101010101010100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
