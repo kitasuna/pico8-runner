@@ -12,9 +12,22 @@ fastfall = {
     fkey = BTN_D,
     state = 0,
     f = function(plr)
-      if(fastfall.state == 0) then
+      if(fastfall.state == 8) then
         plr.vel_y = 0
-        plr.y = GROUND_Y
+      elseif(fastfall.state == 8) then
+        plr.vel_y = 12
+      elseif(fastfall.state == 16) then
+        plr.vel_y = 24
+      elseif(fastfall.state == 24) then
+        -- plr.vel_y = 0
+        -- plr.y = GROUND_Y
+        plr.vel_y = 36
+      end
+
+      fastfall.state += 1
+
+      if(plr.y >= GROUND_Y) then
+        fastfall.state = 0
       end
       return plr
     end
@@ -61,6 +74,7 @@ base = {
   enabled = true,
   fkey = nil,
   state = 0,
+  immune = {},
   f = identityE
 }
 
@@ -68,6 +82,24 @@ abilities = {
   base = base,
   fastfall = fastfall,
   jump = jump
+}
+
+-- TODO: Should be an event
+function kill_p()
+    player.alive = false
+end
+
+-- TODO: Should be an event
+function add_p_score(val)
+  return function()
+    player.score += val
+  end
+end
+
+collisions = {
+  flower = add_p_score(1),
+  fire = kill_p,
+  comet = kill_p
 }
 
 current_player_abil = base

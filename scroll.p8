@@ -117,17 +117,6 @@ function gen_update(gen, gs)
   return gen
 end
 
-function add_p_score(p)
-  return function (val) 
-    p.score += val
-  end
-end
-
-function kill_p(p)
-  return function()
-    p.alive = false
-  end
-end
 
 function shift_map(m, diff)
   m -= diff
@@ -148,26 +137,6 @@ function calc_distance(mkm, thresh)
 end
 
 
--- Player -> Player
---function jump(player)
---    local G = 0.4
---    local addlG = 1
---    local v0 = -4.4
---    local ground_y = GROUND_Y
---
---    if(player.y == ground_y) then
---      player.vel_y = v0
---    elseif(btn(BTN_A) == false) then
---      addlG = 3
---    end
---
---    -- Decelerate player
---    player.vel_y += G * addlG
---
---    return player
---end
-
-
 function upd_player_pos(player)
   player.y += player.vel_y
 
@@ -176,6 +145,7 @@ function upd_player_pos(player)
     player.vel_y = 0
     current_player_abil = base -- MIGHT need to remove this later...
     add(st_ability, { type = 'RESET_STATE', payload = 'jump'})
+    add(st_ability, { type = 'EXEC', payload = 'base'})
   end
 
   return player
@@ -197,10 +167,10 @@ function upd_game()
   game_state.baddies = drop_offscreen(game_state.baddies)
 
   -- Check flower collision
-  foreach(game_state.flowers, bb_coll(game_state.flowers, player, add_p_score(player)))
+  foreach(game_state.flowers, bb_coll_bad(game_state.flowers, player, collisions))
 
   -- Check obstacle collision
-  foreach(game_state.baddies, bb_coll(game_state.baddies, player, kill_p(player)))
+  foreach(game_state.baddies, bb_coll_bad(game_state.baddies, player, collisions))
   
   -- Update global cooldown (spaces out sprites)
   if(game_state.global_cooldown > 0) then game_state.global_cooldown -=1 end
@@ -215,21 +185,17 @@ function upd_game()
   if(btnp(BTN_A)) then
     abil = get_by_key(BTN_A)
     current_player_abil = abil
+    add(st_ability, { type = 'EXEC', payload = abil.name })
     add(st_ability, { type = 'NEXT_STATE', payload = abil.name }) -- TODO: Eventually this will push an EXEC to st_ability, rather than to st_player
-    add(st_player, { type = 'EXEC', payload = abil })
   end
 
   current_player_abil.f(player)
   upd_player_pos(player)
 
-  -- Fastfall if available
-  --if(player.y != ground_y and btnp(BTN_D) and abilities.fastfall.enabled == true) then
-  --  player.y = ground_y
-  --end
   if(btnp(BTN_D)) then
     abil = get_by_key(BTN_D)
     current_player_abil = abil
-    add(st_player, { type = 'EXEC', payload = abil })
+    add(st_ability, { type = 'EXEC', payload = abil.name })
   end
 
   if(btnp(BTN_B)) then
@@ -318,20 +284,21 @@ function drw_game()
     -- Sprite /generator data
     -- print("flcool: "..fl_gen.cooldown, 44, 0, 11)
     -- print("flcmax: "..fl_gen.cooldown_max, 44, 6, 11)
-    print("dudes: "..len(game_state.baddies), 64, 6, CLR_GRN)
+    -- print("dudes: "..len(game_state.baddies), 64, 6, CLR_GRN)
 
     -- Player stats
     -- print("ab: ", 88, 6, 12)
-    print("FF", 112, 6, abilities.fastfall.enabled and CLR_GRN or CLR_RED)
+    -- print("FF", 112, 6, abilities.fastfall.enabled and CLR_GRN or CLR_RED)
     -- print("alive: "..tostr(player.alive), 44, 18, 11)
-    -- print("p.vy: "..player.vel_y, 88, 6)
+    print("p.vy: "..player.vel_y, 70, 0, CLR_RED)
+    print("ab: "..current_player_abil.name, 70, 8, CLR_GRN)
+    print("ff: "..fastfall.state, 70, 15, CLR_GRN)
     --print("gcd: "..global_cooldown, 36, 6, 11)
    
     -- Game state (score, level, etc)
-    print("score: "..player.score, 36, 14, CLR_BLU)
-    print("l: "..game_state.current_level.num.." g:"..game_state.current_level.goal, 0, 14, CLR_GRN)
-    -- print("immune: "..len(player.immune), 0, 21, CLR_GRN)
-    print("jumpst: "..jump.state, 0, 28, CLR_GRN)
+    print("score: "..player.score, 36, 21, CLR_BLU)
+    print("l: "..game_state.current_level.num.." g:"..game_state.current_level.goal, 0, 21, CLR_GRN)
+    -- print("jumpst: "..jump.state, 0, 28, CLR_GRN)
     -- print("flwrs: "..len(game_state.flowers), 0, 28, CLR_GRN)
     -- print("m:km "..game_state.distance.meters..":"..game_state.distance.kilometers, 44, 6, CLR_GRN)
   end
@@ -375,6 +342,20 @@ function bb_coll(ss, playerS, cb)
       ) then
       sprite_drop(ss, s1)
       cb(1)
+    end
+  end
+end
+
+function bb_coll_bad(ss, playerS, coll_map)
+  return function (s1)
+    if (
+          playerS.x < (s1.x + s1.buff_w) + (s1.w - s1.buff_w)
+      and playerS.x + playerS.w > (s1.x + s1.buff_w)
+      and playerS.y + playerS.h > s1.y
+      and playerS.y < s1.y + s1.h
+      ) then
+      sprite_drop(ss, s1)
+      coll_map[s1.type]()
     end
   end
 end
