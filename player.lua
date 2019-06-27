@@ -12,23 +12,16 @@ fastfall = {
     fkey = BTN_D,
     state = 0,
     f = function(plr)
-      if(fastfall.state == 8) then
+      if(fastfall.state == 0) then
         plr.vel_y = 0
-      elseif(fastfall.state == 8) then
+      elseif(fastfall.state == 5) then
         plr.vel_y = 12
-      elseif(fastfall.state == 16) then
+      elseif(fastfall.state == 20) then
         plr.vel_y = 24
-      elseif(fastfall.state == 24) then
-        -- plr.vel_y = 0
-        -- plr.y = GROUND_Y
-        plr.vel_y = 36
       end
 
       fastfall.state += 1
 
-      if(plr.y >= GROUND_Y) then
-        fastfall.state = 0
-      end
       return plr
     end
 }
@@ -86,7 +79,7 @@ abilities = {
 
 -- TODO: Should be an event
 function kill_p()
-    player.alive = false
+  player.alive = false
 end
 
 -- TODO: Should be an event

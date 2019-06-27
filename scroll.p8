@@ -144,7 +144,6 @@ function upd_player_pos(player)
     player.y = ground_y
     player.vel_y = 0
     current_player_abil = base -- MIGHT need to remove this later...
-    add(st_ability, { type = 'RESET_STATE', payload = 'jump'})
     add(st_ability, { type = 'EXEC', payload = 'base'})
   end
 
@@ -185,6 +184,7 @@ function upd_game()
   if(btnp(BTN_A)) then
     abil = get_by_key(BTN_A)
     current_player_abil = abil
+    add(st_ability, { type = 'RESET_STATE', payload = abil.name})
     add(st_ability, { type = 'EXEC', payload = abil.name })
     add(st_ability, { type = 'NEXT_STATE', payload = abil.name }) -- TODO: Eventually this will push an EXEC to st_ability, rather than to st_player
   end
@@ -195,6 +195,7 @@ function upd_game()
   if(btnp(BTN_D)) then
     abil = get_by_key(BTN_D)
     current_player_abil = abil
+    add(st_ability, { type = 'RESET_STATE', payload = abil.name })
     add(st_ability, { type = 'EXEC', payload = abil.name })
   end
 
