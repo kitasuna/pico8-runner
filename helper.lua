@@ -31,3 +31,8 @@ function reduce(f, acc0, xs)
 
   return acc
 end
+
+function print_rj(str, y, clr)
+  local strlen = #str
+  print(str, 128 - (4 * strlen), y, clr)
+end
