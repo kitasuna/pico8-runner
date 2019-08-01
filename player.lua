@@ -20,7 +20,7 @@ fastfall = {
         plr.vel_y = 24
       end
 
-      fastfall.state += 1
+      add(st_ability, { type = 'NEXT_STATE', payload = 'fastfall' })
 
       return plr
     end
@@ -39,7 +39,9 @@ jump = {
       local addlG = 1
       local v0 = -4.4
 
-      if(jump.state == 0) then jump.state = 1 end
+      if(jump.state == 0) then
+        add(st_ability, { type = 'NEXT_STATE', payload = 'jump' })
+      end
 
       if(plr.y == GROUND_Y) then
         plr.vel_y = v0
@@ -51,7 +53,7 @@ jump = {
 
 
       if(plr.y >= GROUND_Y) then
-        jump.state = 0
+        add(st_ability, { type = 'RESET_STATE', payload = 'jump' })
       end
 
       -- Decelerate plr

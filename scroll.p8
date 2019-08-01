@@ -186,7 +186,6 @@ function upd_game()
     current_player_abil = abil
     add(st_ability, { type = 'RESET_STATE', payload = abil.name})
     add(st_ability, { type = 'EXEC', payload = abil.name })
-    add(st_ability, { type = 'NEXT_STATE', payload = abil.name }) -- TODO: Eventually this will push an EXEC to st_ability, rather than to st_player
   end
 
   current_player_abil.f(player)
@@ -252,12 +251,14 @@ function proc_st_ability(abilities)
     end
     if(v.type == 'EXEC') then
       add(st_player, { type = 'EXEC', payload = abilities[v.payload] })
+      -- update collision here
     end
     if(v.type == 'NEXT_STATE') then
       abilities[v.payload].state += 1
     end
     if(v.type == 'RESET_STATE') then
       abilities[v.payload].state = 0
+      -- update collision here
     end
   end
   st_ability = {}
@@ -291,9 +292,8 @@ function drw_game()
     -- print("ab: ", 88, 6, 12)
     -- print("FF", 112, 6, abilities.fastfall.enabled and CLR_GRN or CLR_RED)
     -- print("alive: "..tostr(player.alive), 44, 18, 11)
-    print("p.vy: "..player.vel_y, 70, 0, CLR_RED)
-    print("ab: "..current_player_abil.name, 70, 8, CLR_GRN)
-    print("ff: "..fastfall.state, 70, 15, CLR_GRN)
+    -- print("p.vy: "..player.vel_y, 70, 0, CLR_RED)
+    -- print("ff: "..fastfall.state, 70, 15, CLR_GRN)
     --print("gcd: "..global_cooldown, 36, 6, 11)
    
     -- Game state (score, level, etc)
@@ -302,6 +302,20 @@ function drw_game()
     -- print("jumpst: "..jump.state, 0, 28, CLR_GRN)
     -- print("flwrs: "..len(game_state.flowers), 0, 28, CLR_GRN)
     -- print("m:km "..game_state.distance.meters..":"..game_state.distance.kilometers, 44, 6, CLR_GRN)
+
+    -- Abilities
+    local nexty = 0
+    local ab_msgs = {
+      current_player_abil.name..":a0",
+      tostr(abilities.fastfall.enabled)..":f.e",
+      tostr(abilities.fastfall.state)..":f.s",
+      tostr(abilities.jump.enabled)..":j.e",
+      tostr(abilities.jump.state)..":j.s"
+    }
+    foreach(ab_msgs, function(s) 
+      print_rj(s, nexty, CLR_GRN)
+      nexty += 6
+      end)
   end
 
   foreach(game_state.flowers, sprite_draw)
