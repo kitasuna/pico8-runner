@@ -4,7 +4,6 @@ __lua__
 -- venusian botanist
 map_x = 0
 diff = {0, 0}
-ground_y = 80
 GROUND_Y = 80 -- switch to this eventually
 
 scroll_speed = 1
@@ -140,13 +139,6 @@ end
 function upd_player_pos(player)
   player.y += player.vel_y
 
-  if(player.y >= ground_y) then
-    player.y = ground_y
-    player.vel_y = 0
-    current_player_abil = base -- MIGHT need to remove this later...
-    add(st_ability, { type = 'EXEC', payload = 'base'})
-  end
-
   return player
 end
 
@@ -179,28 +171,28 @@ function upd_game()
   fire_gen = gen_update(fire_gen, game_state)
   comet_gen = gen_update(comet_gen, game_state)
 
-  -- Kinda feel like stream-y stuff should go around here...
   local abil
   if(btnp(BTN_A)) then
     abil = get_by_key(BTN_A)
-    current_player_abil = abil
-    add(st_ability, { type = 'RESET_STATE', payload = abil.name})
-    add(st_ability, { type = 'EXEC', payload = abil.name })
+    if(abil != nil) then
+      add(st_ability, { type = 'NEXT_STATE', payload = abil.name})
+    end
   end
 
-  current_player_abil.f(player)
-  upd_player_pos(player)
 
   if(btnp(BTN_D)) then
     abil = get_by_key(BTN_D)
-    current_player_abil = abil
-    add(st_ability, { type = 'RESET_STATE', payload = abil.name })
-    add(st_ability, { type = 'EXEC', payload = abil.name })
+    -- Fastfalling turns off jump updates
+    if(abil != nil) then
+      add(st_ability, { type = 'RESET_STATE', payload = abilities.jump.name })
+      add(st_ability, { type = 'NEXT_STATE', payload = abil.name })
+    end
   end
 
   if(btnp(BTN_B)) then
     add(st_ability, { type = 'TOGGLE', payload = 'fastfall' } )
   end
+
 
   -- update player animation
   if(game_state.distance.meters % 3 == 0) then
@@ -224,9 +216,18 @@ function upd_game()
     add(st_game, {type = 'DEATH', payload = {}})
   end
 
+  -- TODO: Also make this an event?
+  player.y += player.vel_y
+  for k, v in pairs(abilities) do
+    if(abilities[k].state > 0) then
+      abilities[k].f(player)
+    end
+  end
+
   proc_st_game() -- TODO: Maybe eventually this takes / returns game state... mad side-effects though
   abilities = proc_st_ability(abilities)
-  player = proc_st_player(player)
+  proc_st_player()
+
 end
 
 
@@ -250,7 +251,7 @@ function proc_st_ability(abilities)
       abilities[v.payload].enabled = not abilities[v.payload].enabled
     end
     if(v.type == 'EXEC') then
-      add(st_player, { type = 'EXEC', payload = abilities[v.payload] })
+      -- add(st_player, { type = 'EXEC', payload = abilities[v.payload] })
       -- update collision here
     end
     if(v.type == 'NEXT_STATE') then
@@ -265,14 +266,18 @@ function proc_st_ability(abilities)
   return abilities
 end
 
-function proc_st_player(player)
+function proc_st_player()
   for k, v in pairs(st_player) do
-    if(v.type == 'EXEC') then
-      player.immune = v.payload.immune -- TODO: Concat is more sensible here...
+    if(v.type == 'VEL_Y') then
+      -- maybe need something here?
+      player.vel_y = v.payload
+    end
+    if(v.type == 'POS_Y') then
+      -- maybe need something here?
+      player.y = v.payload
     end
   end
-
-  return player
+  st_player = {}
 end
 
 function drw_game()
@@ -306,11 +311,12 @@ function drw_game()
     -- Abilities
     local nexty = 0
     local ab_msgs = {
-      current_player_abil.name..":a0",
       tostr(abilities.fastfall.enabled)..":f.e",
       tostr(abilities.fastfall.state)..":f.s",
       tostr(abilities.jump.enabled)..":j.e",
-      tostr(abilities.jump.state)..":j.s"
+      tostr(abilities.jump.state)..":j.s",
+      tostr(player.vel_y)..":p.vy",
+      tostr(player.y)..":p.y"
     }
     foreach(ab_msgs, function(s) 
       print_rj(s, nexty, CLR_GRN)
@@ -388,7 +394,7 @@ fl_gen = {
   target = game_state.flowers,
   stacks = false,
   emit = function (ss)
-    local s = { x = 128, y = ground_y, idx = 4, w=8, buff_w = 0, h=8, v=1, type = 'flower'}
+    local s = { x = 128, y = GROUND_Y, idx = 4, w=8, buff_w = 0, h=8, v=1, type = 'flower'}
     add(ss, s)
     return ss
   end
