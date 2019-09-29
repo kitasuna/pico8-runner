@@ -1,9 +1,3 @@
--- Player -> Ability -> Player
--- runs some sort of callback function on the player to alter state
-function identityE(x)
-  return x
-end
-
 fastfall = {
   name = 'fastfall',
   msg = 'You got FASTFALL. Press down to drop to the ground.',
@@ -16,16 +10,20 @@ fastfall = {
       plr.vel_y = 0
     elseif(fastfall.state == 5) then
       plr.vel_y = 12
+      add(st_collision, { type = 'FIRE', payload = coll_void })
     elseif(fastfall.state == 20) then
       plr.vel_y = 24
     end
 
     add(st_ability, { type = 'NEXT_STATE', payload = 'fastfall' })
 
+    -- TODO: This should be done in the player stream...
+    -- if y > GROUND_Y then do all this stuff
     if(plr.y >= GROUND_Y and fastfall.state >= 1) then
       add(st_ability, { type = 'RESET_STATE', payload = 'fastfall' })
       add(st_player, { type = 'POS_Y', payload = GROUND_Y })
       add(st_player, { type = 'VEL_Y', payload = 0 })
+      add(st_collision, { type = 'FIRE_FINISHED', payload = coll_kill_p })
     end
 
     return plr
@@ -36,7 +34,7 @@ jump = {
   name = 'jump',
   msg = 'It\'s JUMP. You just get this.',
   enabled = true,
-  immune = { 'cookies', 'madoka' },
+  immune = { 'cookies' },
   fkey = BTN_A,
   state = 0,
   f = function (plr)
@@ -72,21 +70,14 @@ abilities = {
 }
 
 -- TODO: Should be an event
-function kill_p()
-  player.alive = false
-end
-
--- TODO: Should be an event
-function add_p_score(val)
-  return function()
-    player.score += val
-  end
-end
+coll_kill_p = function () player.alive = false end
+inc_score = function () add(st_player, { type = 'INC_SCORE', payload = 1 }) end
+coll_void = function () end
 
 collisions = {
-  flower = add_p_score(1),
-  fire = kill_p,
-  comet = kill_p
+  flower = inc_score,
+  fire = coll_kill_p,
+  comet = coll_kill_p
 }
 
 -- Btn -> Ability[]
@@ -113,6 +104,7 @@ function init_player()
     h = 6,
     score = 0,
     alive = true,
+    immune = false,
     base_sprite = 5,
   }
 
@@ -128,6 +120,7 @@ function reset_player(player)
   player.vel_x = 0
   player.vel_y = 0
   player.score = 0
+  player.immune = false
 
   return player
  end

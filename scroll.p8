@@ -10,48 +10,18 @@ scroll_speed = 1
 speed_mult = 2
 
 player = {}
+
+-- Streams
 st_game = {}
 st_player = {}
 st_ability = {}
---[[
-  GameState :: {
-    distance :: { meters :: Int, kilometers :: Int },
-    dist_thresh :: Int,
-    global_cooldown :: Int,
-    lock_input :: Int, -- for holding menu screen
-    flowers :: [],
-    fires :: [],
-    comets :: [],
-    current_level :: Int,
-    current_level_idx :: Int,
-  }
-]]--
+st_collision = {}
+
 #include const.lua
 #include player.lua
-game_state = {
-  distance = { meters = 0, kilometers = 0},
-  global_cooldown = 0,
-  lock_input = 0,
-  dist_thresh = 256,
-  flowers = {},
-  baddies = {},
-  current_level = {},
-  current_level_idx = 1,
-  levels = {
-    {
-      num = 0,
-      goal = 5
-    },
-    {
-      num = 1,
-      goal = 20
-    }
-  }
-}
-
+#include state.lua
 
 scrn = {}
-
 
 _debug = true
 
@@ -136,12 +106,6 @@ function calc_distance(mkm, thresh)
 end
 
 
-function upd_player_pos(player)
-  player.y += player.vel_y
-
-  return player
-end
-
 function upd_game()
   -- Scroll map
   map_x = shift_map(map_x , scroll_speed * speed_mult)
@@ -154,14 +118,14 @@ function upd_game()
   foreach(game_state.baddies, shift_sprite)
 
   -- Remove sprite if necessary
-  game_state.flowers = drop_offscreen(game_state.flowers)
-  game_state.baddies = drop_offscreen(game_state.baddies)
+  drop_offscreen(game_state.flowers)
+  drop_offscreen(game_state.baddies)
 
   -- Check flower collision
-  foreach(game_state.flowers, bb_coll_bad(game_state.flowers, player, collisions))
+  foreach(game_state.flowers, bb_coll_bad(game_state.flowers, player))
 
   -- Check obstacle collision
-  foreach(game_state.baddies, bb_coll_bad(game_state.baddies, player, collisions))
+  foreach(game_state.baddies, bb_coll_bad(game_state.baddies, player))
   
   -- Update global cooldown (spaces out sprites)
   if(game_state.global_cooldown > 0) then game_state.global_cooldown -=1 end
@@ -216,8 +180,7 @@ function upd_game()
     add(st_game, {type = 'DEATH', payload = {}})
   end
 
-  -- TODO: Also make this an event?
-  player.y += player.vel_y
+
   for k, v in pairs(abilities) do
     if(abilities[k].state > 0) then
       abilities[k].f(player)
@@ -225,9 +188,12 @@ function upd_game()
   end
 
   proc_st_game() -- TODO: Maybe eventually this takes / returns game state... mad side-effects though
-  abilities = proc_st_ability(abilities)
+  proc_st_collision()
+  proc_st_ability()
   proc_st_player()
 
+  -- TODO: Also make this an event?
+  player.y += player.vel_y
 end
 
 
@@ -244,8 +210,11 @@ function proc_st_game()
   st_game = {}
 end
 
+-- Accesses st_ability, abilities
 -- Ability[] -> Ability[]
-function proc_st_ability(abilities)
+-- Updates ability states
+-- Toggles abilities on and off
+function proc_st_ability()
   for k, v in pairs(st_ability) do
     if(v.type == 'TOGGLE') then
       abilities[v.payload].enabled = not abilities[v.payload].enabled
@@ -266,6 +235,10 @@ function proc_st_ability(abilities)
   return abilities
 end
 
+-- Accesses: st_player, player
+-- Processes st_player queue
+-- Updates player velocity
+-- Updates player position
 function proc_st_player()
   for k, v in pairs(st_player) do
     if(v.type == 'VEL_Y') then
@@ -276,9 +249,29 @@ function proc_st_player()
       -- maybe need something here?
       player.y = v.payload
     end
+    if(v.type == 'INC_SCORE') then
+      player.score += v.payload
+    end
   end
   st_player = {}
 end
+
+function proc_st_collision()
+  for k, v in pairs(st_collision) do
+    if(v.type == 'FIRE') then
+      collisions.fire = v.payload
+      player.immune = true
+    end
+    if(v.type == 'FIRE_FINISHED') then
+      collisions.fire = v.payload
+      player.immune = false
+    end
+  end
+
+end
+
+
+
 
 function drw_game()
   cls(0)
@@ -316,7 +309,8 @@ function drw_game()
       tostr(abilities.jump.enabled)..":j.e",
       tostr(abilities.jump.state)..":j.s",
       tostr(player.vel_y)..":p.vy",
-      tostr(player.y)..":p.y"
+      tostr(player.y)..":p.y",
+      tostr(player.immune)..":imm"
     }
     foreach(ab_msgs, function(s) 
       print_rj(s, nexty, CLR_GRN)
@@ -341,8 +335,6 @@ function drop_offscreen(ss)
       return sprite_drop(ss, s)
     end
   end)
-
-  return ss 
 end
 
 function drop_all(ss)
@@ -367,7 +359,7 @@ function bb_coll(ss, playerS, cb)
   end
 end
 
-function bb_coll_bad(ss, playerS, coll_map)
+function bb_coll_bad(ss, playerS)
   return function (s1)
     if (
           playerS.x < (s1.x + s1.buff_w) + (s1.w - s1.buff_w)
@@ -376,7 +368,7 @@ function bb_coll_bad(ss, playerS, coll_map)
       and playerS.y < s1.y + s1.h
       ) then
       sprite_drop(ss, s1)
-      coll_map[s1.type]()
+      collisions[s1.type]()
     end
   end
 end
@@ -409,7 +401,7 @@ fire_gen = {
   target = game_state.baddies,
   stacks = true,
   emit = function (ss)
-    local s = { x = 128, y = GROUND_Y, idx = 7, w=6, buff_w = 0, h=5, v=1, type = 'fire'}
+    local s = { x = 128, y = GROUND_Y, idx = 7, w=8, buff_w = 0, h=6, v=1, type = 'fire'}
     add(ss, s)
     return ss
   end
@@ -435,7 +427,7 @@ function sprite_drop(ss, s)
 end
 
 function player_draw(p)
-  spr((p.base_sprite + p.frame), p.x, p.y)
+  spr((p.base_sprite + p.frame), p.x, (p.y > GROUND_Y) and GROUND_Y or p.y)
 end
 
 __gfx__
