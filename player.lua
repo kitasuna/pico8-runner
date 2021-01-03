@@ -20,8 +20,8 @@ fastfall = {
     -- if y > GROUND_Y then do all this stuff
     if(plr.y >= GROUND_Y and fastfall.state >= 1) then
       add(st_ability, { type = 'RESET_STATE', payload = 'fastfall' })
-      add(st_player, { type = 'POS_Y', payload = GROUND_Y })
-      add(st_player, { type = 'VEL_Y', payload = 0 })
+      add(st_game, { type = 'PLAYER_POS_Y', payload = GROUND_Y })
+      add(st_game, { type = 'PLAYER_VEL_Y', payload = 0 })
     end
 
     return plr
@@ -40,12 +40,12 @@ jump = {
     local v0 = -4.2
 
     if(jump.state == 1) then
-      add(st_player, { type = 'VEL_Y', payload = v0})
+      add(st_game, { type = 'PLAYER_VEL_Y', payload = v0})
       add(st_ability, { type = 'NEXT_STATE', payload = 'jump' })
     elseif(jump.state >= 2 and plr.y >= GROUND_Y) then
       add(st_ability, { type = 'RESET_STATE', payload = 'jump' })
-      add(st_player, { type = 'POS_Y', payload = GROUND_Y })
-      add(st_player, { type = 'VEL_Y', payload = 0 })
+      add(st_game, { type = 'PLAYER_POS_Y', payload = GROUND_Y })
+      add(st_game, { type = 'PLAYER_VEL_Y', payload = 0 })
     else
       if(plr.vel_y >= 1.0) then
         addlG = 2.8
@@ -53,7 +53,7 @@ jump = {
         addlG = 2.8
       end
 
-      add(st_player, { type = 'VEL_Y', payload = plr.vel_y + (G * addlG) })
+      add(st_game, { type = 'PLAYER_VEL_Y', payload = plr.vel_y + (G * addlG) })
     end
 
     return plr
@@ -66,16 +66,7 @@ abilities = {
   jump = jump
 }
 
--- TODO: Should be an event
-coll_kill_p = function () player.alive = false end
-inc_score = function () add(st_player, { type = 'INC_SCORE', payload = 1 }) end
 coll_void = function () end
-
-collisions = {
-  flower = inc_score,
-  fire = coll_kill_p,
-  comet = coll_kill_p
-}
 
 -- Btn -> Ability[]
 function get_by_key(key)
@@ -89,16 +80,20 @@ function get_by_key(key)
   , nil, abilities)
 end
 
-function proc_events_player() 
+function player_does_things() 
   for k, v in pairs(st_game) do
-      if(v.type == 'DEATH') then
-        drop_all(game_state.entities)
-        game_state.lock_input = 20
-        scrn.upd = upd_lose
-        scrn.drw = drw_lose
+    if(v.type == 'PLAYER_VEL_Y') then
+      player.vel_y = v.payload
+    end
+    if(v.type == 'PLAYER_POS_Y') then
+      player.y = v.payload
+    end
+    if(v.type == 'PLAYER_COLLISION') then
+      if(v.payload.sprite.type == 'flower') then
+        player.score += 1
       end
+    end
   end
-  st_game = {}
 end
 
 

@@ -13,7 +13,6 @@ player = {}
 
 -- Streams
 st_game = {}
-st_player = {}
 st_ability = {}
 st_collision = {}
 
@@ -48,7 +47,6 @@ function god_does_things()
     if(v.type == "PLAYER_COLLISION") then
       -- TODO handle game logic based on entity type
       del(game_state.entities, v.payload.sprite)
-      printh("CURR_ENTITIES: "..len(game_state.entities))
     end
     if(v.type == 'DEATH') then
       drop_all(game_state.entities)
@@ -199,10 +197,9 @@ function upd_game()
 
   debugger_does_things()
   god_does_things()
+  player_does_things()
   proc_st_game() -- TODO: Maybe eventually this takes / returns game state... mad side-effects though
-  -- proc_st_collision()
   proc_st_ability()
-  proc_st_player()
 
   -- Reset message queue
   st_game = {}
@@ -232,10 +229,6 @@ function proc_st_ability()
     if(v.type == 'TOGGLE') then
       abilities[v.payload].enabled = not abilities[v.payload].enabled
     end
-    if(v.type == 'EXEC') then
-      -- add(st_player, { type = 'EXEC', payload = abilities[v.payload] })
-      -- update collision here
-    end
     if(v.type == 'NEXT_STATE') then
       abilities[v.payload].state += 1
     end
@@ -246,27 +239,6 @@ function proc_st_ability()
   end
   st_ability = {}
   return abilities
-end
-
--- Accesses: st_player, player
--- Processes st_player queue
--- Updates player velocity
--- Updates player position
-function proc_st_player()
-  for k, v in pairs(st_player) do
-    if(v.type == 'VEL_Y') then
-      -- maybe need something here?
-      player.vel_y = v.payload
-    end
-    if(v.type == 'POS_Y') then
-      -- maybe need something here?
-      player.y = v.payload
-    end
-    if(v.type == 'INC_SCORE') then
-      player.score += v.payload
-    end
-  end
-  st_player = {}
 end
 
 function drw_game()
@@ -290,7 +262,7 @@ function drw_game()
     --print("gcd: "..global_cooldown, 36, 6, 11)
    
     -- Game state (score, level, etc)
-    -- print("score: "..player.score, 36, 21, CLR_BLU)
+    print("score: "..player.score, 36, 21, CLR_BLU)
     -- print("l: "..game_state.current_level.num.." g:"..game_state.current_level.goal, 0, 21, CLR_GRN)
     -- print("jumpst: "..jump.state, 0, 28, CLR_GRN)
     -- print("m:km "..game_state.distance.meters..":"..game_state.distance.kilometers, 44, 6, CLR_GRN)
@@ -298,12 +270,12 @@ function drw_game()
     -- Abilities
     local nexty = 0
     local ab_msgs = {
-      tostr(abilities.fastfall.enabled)..":f.e",
-      tostr(abilities.fastfall.state)..":f.s",
-      tostr(abilities.jump.enabled)..":j.e",
-      tostr(abilities.jump.state)..":j.s",
-      tostr(player.vel_y)..":p.vy",
-      tostr(player.y)..":p.y",
+      -- tostr(abilities.fastfall.enabled)..":f.e",
+      -- tostr(abilities.fastfall.state)..":f.s",
+      -- tostr(abilities.jump.enabled)..":j.e",
+      -- tostr(abilities.jump.state)..":j.s",
+      -- tostr(player.vel_y)..":p.vy",
+      -- tostr(player.y)..":p.y",
     }
     foreach(ab_msgs, function(s) 
       print_rj(s, nexty, CLR_GRN)
@@ -345,8 +317,6 @@ function run_collision(ss, playerS)
       and playerS.y + playerS.h > s1.y
       and playerS.y < s1.y + s1.h
       ) then
-      -- del(ss, s1)
-      -- collisions[s1.type]()
       add(st_game, { type = 'PLAYER_COLLISION', payload = { player = player, sprite = s1 } })
     end
   end
