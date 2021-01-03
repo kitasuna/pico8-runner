@@ -37,13 +37,35 @@ function _draw()
   scrn.drw()
 end
 
+function debugger_does_things()
+  for k, v in pairs(st_game) do
+    printh("GOT EVENT: "..v.type)
+  end
+end
+
+function god_does_things()
+  for k, v in pairs(st_game) do
+    if(v.type == "PLAYER_COLLISION") then
+      -- TODO handle game logic based on entity type
+      del(game_state.entities, v.payload.sprite)
+      printh("CURR_ENTITIES: "..len(game_state.entities))
+    end
+    if(v.type == 'DEATH') then
+      drop_all(game_state.entities)
+      game_state.lock_input = 20
+      scrn.upd = upd_lose
+      scrn.drw = drw_lose
+    end
+  end
+end
+
 function gen_update(gen, gs)
   if (gen.cooldown > 0) then
     gen.cooldown -= 1
   end
 
   if(gs.global_cooldown > 0) then
-    return gen
+    return 
   end
 
   if(gen.cooldown <= 0) then
@@ -83,17 +105,7 @@ function gen_update(gen, gs)
     end
   end
 
-  return gen
-end
-
-
-function shift_map(m, diff)
-  m -= diff
-  if(m < -127) then
-    m = 0
-  end
-
-  return m
+  return
 end
 
 function calc_distance(mkm, thresh)
@@ -108,32 +120,30 @@ end
 
 function upd_game()
   -- Scroll map
-  map_x = shift_map(map_x , scroll_speed * speed_mult)
+  map_x -= (scroll_speed * speed_mult)
+  if(map_x < -127) then
+    map_x = 0
+  end
 
   -- Increment distance traveled
   game_state.distance = calc_distance(game_state.distance, game_state.dist_thresh)
 
   -- Update sprite pos
-  foreach(game_state.flowers, shift_sprite)
-  foreach(game_state.baddies, shift_sprite)
+  foreach(game_state.entities, shift_sprite)
 
   -- Remove sprite if necessary
-  drop_offscreen(game_state.flowers)
-  drop_offscreen(game_state.baddies)
+  drop_offscreen(game_state.entities)
 
-  -- Check flower collision
-  foreach(game_state.flowers, bb_coll_bad(game_state.flowers, player))
-
-  -- Check obstacle collision
-  foreach(game_state.baddies, bb_coll_bad(game_state.baddies, player))
+  -- Check entity collision
+  foreach(game_state.entities, run_collision(game_state.entities, player))
   
   -- Update global cooldown (spaces out sprites)
   if(game_state.global_cooldown > 0) then game_state.global_cooldown -=1 end
 
   -- Update the generators
-  fl_gen = gen_update(fl_gen, game_state)
-  fire_gen = gen_update(fire_gen, game_state)
-  comet_gen = gen_update(comet_gen, game_state)
+  gen_update(fl_gen, game_state)
+  gen_update(fire_gen, game_state)
+  gen_update(comet_gen, game_state)
 
   local abil
   if(btnp(BTN_A)) then
@@ -187,10 +197,15 @@ function upd_game()
     end
   end
 
+  debugger_does_things()
+  god_does_things()
   proc_st_game() -- TODO: Maybe eventually this takes / returns game state... mad side-effects though
-  proc_st_collision()
+  -- proc_st_collision()
   proc_st_ability()
   proc_st_player()
+
+  -- Reset message queue
+  st_game = {}
 
   -- TODO: Also make this an event?
   player.y += player.vel_y
@@ -200,14 +215,12 @@ end
 function proc_st_game()
   for k, v in pairs(st_game) do
       if(v.type == 'DEATH') then
-        -- foreach(game_state.baddies, sprite_drop(game_state.baddies))
-        drop_all(game_state.baddies)
+        drop_all(game_state.entities)
         game_state.lock_input = 20
         scrn.upd = upd_lose
         scrn.drw = drw_lose
       end
   end
-  st_game = {}
 end
 
 -- Accesses st_ability, abilities
@@ -256,35 +269,17 @@ function proc_st_player()
   st_player = {}
 end
 
-function proc_st_collision()
-  for k, v in pairs(st_collision) do
-    if(v.type == 'FIRE') then
-      collisions.fire = v.payload
-      player.immune = true
-    end
-    if(v.type == 'FIRE_FINISHED') then
-      collisions.fire = v.payload
-      player.immune = false
-    end
-  end
-
-end
-
-
-
-
 function drw_game()
   cls(0)
   map(0,0,map_x,0,16,16)
   map(0,0,map_x+128,0,16,16)
 
   if(_debug) then
-    print("debug mode", 0, 0, 11)
+    -- printh("debug mode")
 
     -- Sprite /generator data
     -- print("flcool: "..fl_gen.cooldown, 44, 0, 11)
     -- print("flcmax: "..fl_gen.cooldown_max, 44, 6, 11)
-    -- print("dudes: "..len(game_state.baddies), 64, 6, CLR_GRN)
 
     -- Player stats
     -- print("ab: ", 88, 6, 12)
@@ -295,10 +290,9 @@ function drw_game()
     --print("gcd: "..global_cooldown, 36, 6, 11)
    
     -- Game state (score, level, etc)
-    print("score: "..player.score, 36, 21, CLR_BLU)
-    print("l: "..game_state.current_level.num.." g:"..game_state.current_level.goal, 0, 21, CLR_GRN)
+    -- print("score: "..player.score, 36, 21, CLR_BLU)
+    -- print("l: "..game_state.current_level.num.." g:"..game_state.current_level.goal, 0, 21, CLR_GRN)
     -- print("jumpst: "..jump.state, 0, 28, CLR_GRN)
-    -- print("flwrs: "..len(game_state.flowers), 0, 28, CLR_GRN)
     -- print("m:km "..game_state.distance.meters..":"..game_state.distance.kilometers, 44, 6, CLR_GRN)
 
     -- Abilities
@@ -310,7 +304,6 @@ function drw_game()
       tostr(abilities.jump.state)..":j.s",
       tostr(player.vel_y)..":p.vy",
       tostr(player.y)..":p.y",
-      tostr(player.immune)..":imm"
     }
     foreach(ab_msgs, function(s) 
       print_rj(s, nexty, CLR_GRN)
@@ -318,8 +311,7 @@ function drw_game()
       end)
   end
 
-  foreach(game_state.flowers, sprite_draw)
-  foreach(game_state.baddies, sprite_draw)
+  foreach(game_state.entities, sprite_draw)
 
   player_draw(player)
 end
@@ -332,20 +324,20 @@ end
 function drop_offscreen(ss)
   foreach(ss, function(s)
     if(s.x < -16) then
-      return sprite_drop(ss, s)
+      return del(ss, s)
     end
   end)
 end
 
 function drop_all(ss)
   foreach(ss, function(s)
-    return sprite_drop(ss, s)
+    return del(ss, s)
   end)
 
   return ss 
 end
 
-function bb_coll(ss, playerS, cb)
+function run_collision(ss, playerS)
   return function (s1)
     if (
           playerS.x < (s1.x + s1.buff_w) + (s1.w - s1.buff_w)
@@ -353,22 +345,9 @@ function bb_coll(ss, playerS, cb)
       and playerS.y + playerS.h > s1.y
       and playerS.y < s1.y + s1.h
       ) then
-      sprite_drop(ss, s1)
-      cb(1)
-    end
-  end
-end
-
-function bb_coll_bad(ss, playerS)
-  return function (s1)
-    if (
-          playerS.x < (s1.x + s1.buff_w) + (s1.w - s1.buff_w)
-      and playerS.x + playerS.w > (s1.x + s1.buff_w)
-      and playerS.y + playerS.h > s1.y
-      and playerS.y < s1.y + s1.h
-      ) then
-      sprite_drop(ss, s1)
-      collisions[s1.type]()
+      -- del(ss, s1)
+      -- collisions[s1.type]()
+      add(st_game, { type = 'PLAYER_COLLISION', payload = { player = player, sprite = s1 } })
     end
   end
 end
@@ -383,7 +362,7 @@ fl_gen = {
   cooldown_max = 120,
   sprite_width = 8 + 4, -- extra wide buffer
   last_width = 0,
-  target = game_state.flowers,
+  target = game_state.entities,
   stacks = false,
   emit = function (ss)
     local s = { x = 128, y = GROUND_Y, idx = 4, w=8, buff_w = 0, h=8, v=1, type = 'flower'}
@@ -398,7 +377,7 @@ fire_gen = {
   cooldown_max = 90,
   sprite_width = 8,
   last_width = 0,
-  target = game_state.baddies,
+  target = game_state.entities,
   stacks = true,
   emit = function (ss)
     local s = { x = 128, y = GROUND_Y, idx = 7, w=8, buff_w = 0, h=6, v=1, type = 'fire'}
@@ -413,7 +392,7 @@ comet_gen = {
   cooldown_max = 210,
   sprite_width = 8,
   last_width = 0,
-  target = game_state.baddies,
+  target = game_state.entities,
   stacks = false,
   emit = function(ss)
     local s = { x = 128, y = 58, idx = 8, w=6, buff_w=0, h=6, v=2, type = 'comet'}
@@ -421,10 +400,6 @@ comet_gen = {
     return ss
   end
 }
-
-function sprite_drop(ss, s)
-  del(ss, s)
-end
 
 function player_draw(p)
   spr((p.base_sprite + p.frame), p.x, (p.y > GROUND_Y) and GROUND_Y or p.y)

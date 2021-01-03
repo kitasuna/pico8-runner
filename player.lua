@@ -2,7 +2,6 @@ fastfall = {
   name = 'fastfall',
   msg = 'You got FASTFALL. Press down to drop to the ground.',
   enabled = false,
-  immune = { 'fire' },
   fkey = BTN_D,
   state = 0,
   f = function(plr)
@@ -10,7 +9,7 @@ fastfall = {
       plr.vel_y = 0
     elseif(fastfall.state == 5) then
       plr.vel_y = 12
-      add(st_collision, { type = 'FIRE', payload = coll_void })
+      add(st_game, { type = 'FIRE', payload = coll_void })
     elseif(fastfall.state == 20) then
       plr.vel_y = 24
     end
@@ -23,7 +22,6 @@ fastfall = {
       add(st_ability, { type = 'RESET_STATE', payload = 'fastfall' })
       add(st_player, { type = 'POS_Y', payload = GROUND_Y })
       add(st_player, { type = 'VEL_Y', payload = 0 })
-      add(st_collision, { type = 'FIRE_FINISHED', payload = coll_kill_p })
     end
 
     return plr
@@ -34,7 +32,6 @@ jump = {
   name = 'jump',
   msg = 'It\'s JUMP. You just get this.',
   enabled = true,
-  immune = { 'cookies' },
   fkey = BTN_A,
   state = 0,
   f = function (plr)
@@ -92,6 +89,18 @@ function get_by_key(key)
   , nil, abilities)
 end
 
+function proc_events_player() 
+  for k, v in pairs(st_game) do
+      if(v.type == 'DEATH') then
+        drop_all(game_state.entities)
+        game_state.lock_input = 20
+        scrn.upd = upd_lose
+        scrn.drw = drw_lose
+      end
+  end
+  st_game = {}
+end
+
 
 function init_player()
   player = {
@@ -104,7 +113,6 @@ function init_player()
     h = 6,
     score = 0,
     alive = true,
-    immune = false,
     base_sprite = 5,
   }
 
@@ -120,7 +128,6 @@ function reset_player(player)
   player.vel_x = 0
   player.vel_y = 0
   player.score = 0
-  player.immune = false
 
   return player
  end

@@ -10,9 +10,7 @@ function init_game(gs)
 
   gs.lock_input = 0
   gs.distance = { meters = 0, kilometers = 0 }
-  gs.flowers = drop_all_sprites(game_state.flowers)
-  gs.fires = drop_all_sprites(game_state.fires)
-  gs.comets = drop_all_sprites(game_state.comets)
+  gs.entities = drop_all_sprites(game_state.entities)
   scrn.drw = drw_game
   scrn.upd = upd_game
 
@@ -26,9 +24,7 @@ function next_level(gs)
 
   gs.lock_input = 0
   gs.distance = { meters = 0, kilometers = 0 }
-  gs.flowers = drop_all_sprites(game_state.flowers)
-  gs.fires = drop_all_sprites(game_state.fires)
-  gs.comets = drop_all_sprites(game_state.comets)
+  gs.entities = drop_all_sprites(game_state.entities)
   scrn.drw = drw_game
   scrn.upd = upd_game
 
