@@ -1,41 +1,42 @@
 function upd_win()
-  game_state = handle_level_tween(game_state)
+  handle_level_tween()
 end
 
 function upd_lose()
-  game_state = handle_menu(game_state)
+  handle_menu()
 end
 
 function upd_title()
-  game_state = handle_menu(game_state)
+  handle_menu()
 end
 
--- GameState -> GameState
-function handle_menu(gs)
-  local lvl_len = len(gs.levels)   
-  if(gs.lock_input == 0) then
-    if(btnp(BTN_A) or btnp(BTN_B)) then return init_game(gs) end
-    if(btnp(BTN_D) and (gs.current_level_idx > 1)) then gs.current_level_idx -= 1 end
-    if(btnp(BTN_U) and (gs.current_level_idx < lvl_len)) then gs.current_level_idx += 1 end
+function handle_menu()
+  local lvl_len = len(game_state.levels)   
+  if(game_state.lock_input == 0) then
+    if(btnp(BTN_A) or btnp(BTN_B)) then return init_game(game_state) end
+    if(btnp(BTN_D) and (gs.current_level_idx > 1)) then game_state.current_level_idx -= 1 end
+    if(btnp(BTN_U) and (gs.current_level_idx < lvl_len)) then game_state.current_level_idx += 1 end
   end
-  if(gs.lock_input > 0) then
-    gs.lock_input -= 1
+  if(game_state.lock_input > 0) then
+    game_state.lock_input -= 1
   end
-  return gs
 end
 
--- GameState -> GameState
-function handle_level_tween(gs)
-  local lvl_len = len(gs.levels)   
-  if(gs.lock_input == 0) then
-    if(btnp(BTN_A) or btnp(BTN_B)) then return next_level(gs) end
-    if(btnp(BTN_D) and (gs.current_level_idx > 1)) then gs.current_level_idx -= 1 end
-    if(btnp(BTN_U) and (gs.current_level_idx < lvl_len)) then gs.current_level_idx += 1 end
+function handle_level_tween()
+  local lvl_len = len(game_state.levels)   
+  if(game_state.lock_input == 0) then
+    -- TODO
+    --  change this next_level call to an event
+    --  make this  "current level" thing a local? can we persist it somehow? just
+    --    get it out of the game_state
+    --  Try to make sure only god function modifies game state so things don't get weird
+    if(btnp(BTN_A) or btnp(BTN_B)) then return next_level(game_state) end
+    if(btnp(BTN_D) and (game_state.current_level_idx > 1)) then game_state.current_level_idx -= 1 end
+    if(btnp(BTN_U) and (game_state.current_level_idx < lvl_len)) then game_state.current_level_idx += 1 end
   end
-  if(gs.lock_input > 0) then
-    gs.lock_input -= 1
+  if(game_state.lock_input > 0) then
+    game_state.lock_input -= 1
   end
-  return gs
 end
 
 function handle_lose()

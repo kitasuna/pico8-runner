@@ -5,16 +5,13 @@ __lua__
 map_x = 0
 diff = {0, 0}
 GROUND_Y = 80 -- switch to this eventually
-
 scroll_speed = 1
 speed_mult = 2
 
 player = {}
 
--- Streams
+-- Event stream
 st_game = {}
-st_ability = {}
-st_collision = {}
 
 #include const.lua
 #include player.lua
@@ -53,6 +50,25 @@ function god_does_things()
       game_state.lock_input = 20
       scrn.upd = upd_lose
       scrn.drw = drw_lose
+    end
+    if(v.type == 'LEVEL_CLEAR') then
+      drop_all(game_state.entities)
+      game_state.lock_input = 20
+      abilities[v.payload.enable_on_clear].enabled = true
+      scrn.upd = upd_win
+      scrn.drw = drw_win
+    end
+    if(v.type == 'LEVEL_NEXT') then
+      game_state.current_level = game_state.levels[v.payload] 
+
+      -- TODO maybe do this with an event...
+      player = reset_player(player)
+
+      game_state.lock_input = 0
+      game_state.distance = { meters = 0, kilometers = 0 }
+      game_state.entities = drop_all_sprites(game_state.entities)
+      scrn.drw = drw_game
+      scrn.upd = upd_game
     end
   end
 end
@@ -144,27 +160,16 @@ function upd_game()
   gen_update(comet_gen, game_state)
 
   local abil
-  if(btnp(BTN_A)) then
-    abil = get_by_key(BTN_A)
-    if(abil != nil) then
-      add(st_ability, { type = 'NEXT_STATE', payload = abil.name})
-    end
+  if(btnp(BTN_A) and abilities.jump.enabled == true) then
+    add(st_game, { type = 'ABILITY_FIRE', payload = abilities.jump.name})
   end
 
 
-  if(btnp(BTN_D)) then
-    abil = get_by_key(BTN_D)
+  if(btnp(BTN_D) and abilities.fastfall.enabled == true) then
     -- Fastfalling turns off jump updates
-    if(abil != nil) then
-      add(st_ability, { type = 'RESET_STATE', payload = abilities.jump.name })
-      add(st_ability, { type = 'NEXT_STATE', payload = abil.name })
-    end
+    add(st_game, { type = 'ABILITY_STOP_FIRE', payload = abilities.jump.name })
+    add(st_game, { type = 'ABILITY_FIRE', payload = abilities.fastfall.name })
   end
-
-  if(btnp(BTN_B)) then
-    add(st_ability, { type = 'TOGGLE', payload = 'fastfall' } )
-  end
-
 
   -- update player animation
   if(game_state.distance.meters % 3 == 0) then
@@ -177,10 +182,7 @@ function upd_game()
 
   -- TODO: Add event here
   if(player.score >= game_state.current_level.goal) then
-    game_state.lock_input = 20
-    abilities.fastfall.enabled = true
-    scrn.upd = upd_win
-    scrn.drw = drw_win
+    add(st_game, {type = 'LEVEL_CLEAR', payload = game_state.current_level})
   end
 
   
@@ -189,17 +191,16 @@ function upd_game()
   end
 
 
+
+  god_does_things()
+  abilities_do_things()
   for k, v in pairs(abilities) do
     if(abilities[k].state > 0) then
       abilities[k].f(player)
     end
   end
-
-  debugger_does_things()
-  god_does_things()
   player_does_things()
-  proc_st_game() -- TODO: Maybe eventually this takes / returns game state... mad side-effects though
-  proc_st_ability()
+  debugger_does_things()
 
   -- Reset message queue
   st_game = {}
@@ -207,7 +208,6 @@ function upd_game()
   -- TODO: Also make this an event?
   player.y += player.vel_y
 end
-
 
 function proc_st_game()
   for k, v in pairs(st_game) do
@@ -218,27 +218,6 @@ function proc_st_game()
         scrn.drw = drw_lose
       end
   end
-end
-
--- Accesses st_ability, abilities
--- Ability[] -> Ability[]
--- Updates ability states
--- Toggles abilities on and off
-function proc_st_ability()
-  for k, v in pairs(st_ability) do
-    if(v.type == 'TOGGLE') then
-      abilities[v.payload].enabled = not abilities[v.payload].enabled
-    end
-    if(v.type == 'NEXT_STATE') then
-      abilities[v.payload].state += 1
-    end
-    if(v.type == 'RESET_STATE') then
-      abilities[v.payload].state = 0
-      -- update collision here
-    end
-  end
-  st_ability = {}
-  return abilities
 end
 
 function drw_game()
@@ -255,7 +234,6 @@ function drw_game()
 
     -- Player stats
     -- print("ab: ", 88, 6, 12)
-    -- print("FF", 112, 6, abilities.fastfall.enabled and CLR_GRN or CLR_RED)
     -- print("alive: "..tostr(player.alive), 44, 18, 11)
     -- print("p.vy: "..player.vel_y, 70, 0, CLR_RED)
     -- print("ff: "..fastfall.state, 70, 15, CLR_GRN)
@@ -270,10 +248,10 @@ function drw_game()
     -- Abilities
     local nexty = 0
     local ab_msgs = {
-      -- tostr(abilities.fastfall.enabled)..":f.e",
-      -- tostr(abilities.fastfall.state)..":f.s",
-      -- tostr(abilities.jump.enabled)..":j.e",
-      -- tostr(abilities.jump.state)..":j.s",
+      tostr(abilities.jump.enabled)..":j.e",
+      tostr(abilities.jump.state)..":j.s",
+      tostr(abilities.fastfall.state)..":f.s",
+      tostr(abilities.fastfall.enabled)..":f.e",
       -- tostr(player.vel_y)..":p.vy",
       -- tostr(player.y)..":p.y",
     }

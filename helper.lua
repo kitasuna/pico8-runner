@@ -9,7 +9,7 @@ end
 
 function drop_all_sprites(ss)
   foreach(ss, function(s)
-      return sprite_drop(ss, s)
+      return del(ss, s)
   end)
 
   return ss 

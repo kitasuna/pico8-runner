@@ -9,11 +9,13 @@ game_state = {
   levels = {
     {
       num = 0,
-      goal = 5
+      goal = 1,
+      enable_on_clear = 'fastfall'
     },
     {
       num = 1,
-      goal = 20
+      goal = 20,
+      enable_on_clear = 'fastfall'
     }
   }
 }

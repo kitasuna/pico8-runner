@@ -9,17 +9,14 @@ fastfall = {
       plr.vel_y = 0
     elseif(fastfall.state == 5) then
       plr.vel_y = 12
-      add(st_game, { type = 'FIRE', payload = coll_void })
     elseif(fastfall.state == 20) then
       plr.vel_y = 24
     end
 
-    add(st_ability, { type = 'NEXT_STATE', payload = 'fastfall' })
+    fastfall.state += 1
 
-    -- TODO: This should be done in the player stream...
-    -- if y > GROUND_Y then do all this stuff
     if(plr.y >= GROUND_Y and fastfall.state >= 1) then
-      add(st_ability, { type = 'RESET_STATE', payload = 'fastfall' })
+      abilities.fastfall.state = 0
       add(st_game, { type = 'PLAYER_POS_Y', payload = GROUND_Y })
       add(st_game, { type = 'PLAYER_VEL_Y', payload = 0 })
     end
@@ -41,11 +38,14 @@ jump = {
 
     if(jump.state == 1) then
       add(st_game, { type = 'PLAYER_VEL_Y', payload = v0})
-      add(st_ability, { type = 'NEXT_STATE', payload = 'jump' })
+      jump.state += 1
     elseif(jump.state >= 2 and plr.y >= GROUND_Y) then
-      add(st_ability, { type = 'RESET_STATE', payload = 'jump' })
+      -- TODO if we put this into the event stream, it gets wiped out before it gets
+      -- intercepted in the next frame...
+      abilities.jump.state = -1
       add(st_game, { type = 'PLAYER_POS_Y', payload = GROUND_Y })
       add(st_game, { type = 'PLAYER_VEL_Y', payload = 0 })
+      jump.state += 1
     else
       if(plr.vel_y >= 1.0) then
         addlG = 2.8
@@ -54,6 +54,7 @@ jump = {
       end
 
       add(st_game, { type = 'PLAYER_VEL_Y', payload = plr.vel_y + (G * addlG) })
+      jump.state += 1
     end
 
     return plr
@@ -66,18 +67,15 @@ abilities = {
   jump = jump
 }
 
-coll_void = function () end
-
--- Btn -> Ability[]
-function get_by_key(key)
-  return reduce(function (acc, x)
-    if(x.fkey == key and x.state == 0 and x.enabled == true) then
-     return x
+function abilities_do_things()
+  for k, v in pairs(st_game) do
+    if(v.type == 'ABILITY_FIRE' and abilities[v.payload].state == 0) then
+      abilities[v.payload].state = 1
     end
-
-    return acc
+    if(v.type == 'ABILITY_STOP_FIRE') then
+      abilities[v.payload].state = 0
+    end
   end
-  , nil, abilities)
 end
 
 function player_does_things() 
