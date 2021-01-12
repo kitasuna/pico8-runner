@@ -14,8 +14,8 @@ function handle_menu()
   local lvl_len = len(game_state.levels)   
   if(game_state.lock_input == 0) then
     if(btnp(BTN_A) or btnp(BTN_B)) then return init_game(game_state) end
-    if(btnp(BTN_D) and (gs.current_level_idx > 1)) then game_state.current_level_idx -= 1 end
-    if(btnp(BTN_U) and (gs.current_level_idx < lvl_len)) then game_state.current_level_idx += 1 end
+    if(btnp(BTN_D) and (game_state.current_level_idx > 1)) then game_state.current_level_idx -= 1 end
+    if(btnp(BTN_U) and (game_state.current_level_idx < lvl_len)) then game_state.current_level_idx += 1 end
   end
   if(game_state.lock_input > 0) then
     game_state.lock_input -= 1

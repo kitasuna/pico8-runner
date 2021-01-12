@@ -8,8 +8,17 @@ function init_game(gs)
 
   init_player()
 
+  world = build_world()
+
+  for lvl in all(world) do
+    for f in all(lvl) do
+      printh("flower at: "..f)
+    end
+  end
+
   gs.lock_input = 0
-  gs.distance = { meters = 0, kilometers = 0 }
+  gs.distance = 0
+  gs.half_distance = 0
   gs.entities = drop_all_sprites(game_state.entities)
   scrn.drw = drw_game
   scrn.upd = upd_game
@@ -20,10 +29,11 @@ end
 function next_level(gs)
   gs.current_level = gs.levels[gs.current_level_idx] 
 
-  player = reset_player(player)
+  init_player()
 
   gs.lock_input = 0
-  gs.distance = { meters = 0, kilometers = 0 }
+  gs.distance = 0
+  gs.half_distance = 0
   gs.entities = drop_all_sprites(game_state.entities)
   scrn.drw = drw_game
   scrn.upd = upd_game

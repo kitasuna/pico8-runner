@@ -32,9 +32,9 @@ jump = {
   fkey = BTN_A,
   state = 0,
   f = function (plr)
-    local G = 0.4
-    local addlG = 1
-    local v0 = -4.2
+    local G = 0.8
+    local addlG = 0.3
+    local v0 = -3.8
 
     if(jump.state == 1) then
       add(st_game, { type = 'PLAYER_VEL_Y', payload = v0})
@@ -47,10 +47,10 @@ jump = {
       add(st_game, { type = 'PLAYER_VEL_Y', payload = 0 })
       jump.state += 1
     else
-      if(plr.vel_y >= 1.0) then
-        addlG = 2.8
+      if(plr.vel_y >= 2.5) then
+        addlG = 0.4
       elseif(btn(BTN_A) == false) then -- TODO: Can ref fkey above?
-        addlG = 2.8
+        addlG = 0.4
       end
 
       add(st_game, { type = 'PLAYER_VEL_Y', payload = plr.vel_y + (G * addlG) })
@@ -86,6 +86,9 @@ function player_does_things()
     if(v.type == 'PLAYER_POS_Y') then
       player.y = v.payload
     end
+    if(v.type == 'PLAYER_BATTERY_DOWN') then
+      player.battery -= v.payload
+    end
     if(v.type == 'PLAYER_COLLISION') then
       if(v.payload.sprite.type == 'flower') then
         player.score += 1
@@ -96,31 +99,15 @@ end
 
 
 function init_player()
-  player = {
-    frame = 0,
-    x = 24,
-    y = GROUND_Y,
-    vel_x = 0,
-    vel_y = 0,
-    w = 8,
-    h = 6,
-    score = 0,
-    alive = true,
-    base_sprite = 5,
-  }
-
-  return player
+    player.frame = 0
+    player.half_frame = 0
+    player.x = 24
+    player.y = GROUND_Y
+    player.battery = 100
+    player.vel_x = 0
+    player.vel_y = 0
+    player.w = 8
+    player.h = 6
+    player.score = 0
+    player.base_sprite = 5
 end
-
-
-
-function reset_player(player)
-  player.frame = 0
-  player.x = 24
-  player.y = GROUND_Y
-  player.vel_x = 0
-  player.vel_y = 0
-  player.score = 0
-
-  return player
- end

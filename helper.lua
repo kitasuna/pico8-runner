@@ -7,6 +7,15 @@ function len(xs)
   return count
 end
 
+function val_in_seq(seq, val, buffer)
+  for s in all(seq) do
+    if val >= (s - buffer) and val <= (s + buffer) then
+      return true
+    end
+  end
+  return false
+end
+
 function drop_all_sprites(ss)
   foreach(ss, function(s)
       return del(ss, s)

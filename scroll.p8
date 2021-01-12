@@ -1,22 +1,24 @@
 pico-8 cartridge // http://www.pico-8.com
-version 18
+version 29
 __lua__
 -- venusian botanist
 map_x = 0
 diff = {0, 0}
 GROUND_Y = 80 -- switch to this eventually
 scroll_speed = 1
-speed_mult = 2
+speed_mult = 1
 
 player = {}
 
 -- Event stream
 st_game = {}
 
+-- ... world
+world = {}
+
 #include const.lua
 #include player.lua
 #include state.lua
-
 scrn = {}
 
 _debug = true
@@ -25,12 +27,51 @@ _debug = true
 #include init.lua
 #include menus.lua
 
-function _update()
+function _update60()
   scrn.upd()
 end
 
 function _draw()
   scrn.drw()
+end
+
+flower_points = 3
+-- points needed to get a battery upgrade
+points_needed = { (flower_points * 5), (flower_points * 10) }
+-- we can generate this later when we get things sorted
+total_score = flower_points * 15
+-- how far we want the player to be able to travel
+distances = { 400 , 600 }
+-- distance[i] / 4
+battery_levels = { 100, 150 }
+
+function build_world()
+  local levels = {}
+  local current_max_distance = 0
+
+  for i=1,#points_needed do
+    -- subtract 16 here to account for stuff that gets generated towards the end of the level
+    add(levels, build_day(points_needed[i], (distances[i] - 42), current_max_distance, 0))
+    current_max_distance += distances[i]
+  end
+  return levels
+end
+
+function build_day(how_many_points, maximum_distance, offset, buffer)
+  local flowers = {}
+  local points_so_far = 0
+
+  while points_so_far <= how_many_points do
+     -- randomly pick an x position
+     local my_x = flr(rnd(maximum_distance + buffer - offset)) + offset
+     -- check to make sure it's not already in the sequence
+     if (val_in_seq(flowers, my_x, 4) == false) then
+       points_so_far += flower_points
+       add(flowers, my_x)
+     end
+  end
+
+  return flowers
 end
 
 function debugger_does_things()
@@ -62,10 +103,11 @@ function god_does_things()
       game_state.current_level = game_state.levels[v.payload] 
 
       -- TODO maybe do this with an event...
-      player = reset_player(player)
+      init_player()
 
       game_state.lock_input = 0
-      game_state.distance = { meters = 0, kilometers = 0 }
+      game_state.distance = 0
+      game_state.half_distance = 0
       game_state.entities = drop_all_sprites(game_state.entities)
       scrn.drw = drw_game
       scrn.upd = upd_game
@@ -93,9 +135,7 @@ function gen_update(gen, gs)
       local nxt = flr(rnd(gen.cooldown_max - gen.cooldown_min))
 
       -- Max width of fires (consecutive sprites, in this case)
-      local f0 = gs.distance.kilometers > 1 and 1 or 0
-      local f1 = gs.distance.kilometers > 3 and 1 or 0
-      local max_width = 1 + f0 + f1
+      local max_width = 1
 
       -- If this generator stacks
       -- _and_
@@ -113,7 +153,7 @@ function gen_update(gen, gs)
 
   -- Adjusts cooldown boundaries based on level distance
   if(gen.cooldown_max > gen.cooldown_min) then
-    gen.cooldown_max = gen.cooldown_max - (gs.distance.kilometers / 10)
+    gen.cooldown_max = gen.cooldown_max - (gs.distance / 10)
     if(gen.cooldown_max < gen.cooldown_min) then
       gen.cooldown_max = gen.cooldown_min
     end
@@ -121,16 +161,6 @@ function gen_update(gen, gs)
 
   return
 end
-
-function calc_distance(mkm, thresh)
-  mkm.meters += 1 
-  if(mkm.meters > thresh) then
-    mkm.kilometers += 1
-    mkm.meters = 0
-  end
-  return mkm
-end
-
 
 function upd_game()
   -- Scroll map
@@ -140,7 +170,15 @@ function upd_game()
   end
 
   -- Increment distance traveled
-  game_state.distance = calc_distance(game_state.distance, game_state.dist_thresh)
+  game_state.half_distance += 1
+  if(game_state.half_distance >= 3) then
+    game_state.distance += 1
+    game_state.half_distance = 0
+
+    if(game_state.distance % 4 == 0) then
+      add(st_game, { type = 'PLAYER_BATTERY_DOWN', payload = 1})
+    end
+  end
 
   -- Update sprite pos
   foreach(game_state.entities, shift_sprite)
@@ -154,10 +192,17 @@ function upd_game()
   -- Update global cooldown (spaces out sprites)
   if(game_state.global_cooldown > 0) then game_state.global_cooldown -=1 end
 
+  -- check current level to see if we need to fire a flower off
+  for f in all(world[game_state.current_level_idx]) do
+    if game_state.distance == f and game_state.half_distance == 0 then
+      printh("flower in main game loop at: "..f)
+      fl_gen.emit(game_state.entities)
+    end
+  end
   -- Update the generators
-  gen_update(fl_gen, game_state)
-  gen_update(fire_gen, game_state)
-  gen_update(comet_gen, game_state)
+  -- gen_update(fl_gen, game_state)
+  -- gen_update(fire_gen, game_state)
+  -- gen_update(comet_gen, game_state)
 
   local abil
   if(btnp(BTN_A) and abilities.jump.enabled == true) then
@@ -172,7 +217,7 @@ function upd_game()
   end
 
   -- update player animation
-  if(game_state.distance.meters % 3 == 0) then
+  if(game_state.distance % 3 == 0) then
     if(player.frame == 0) then
       player.frame = 1
     else
@@ -180,18 +225,11 @@ function upd_game()
     end
   end
 
-  -- TODO: Add event here
-  if(player.score >= game_state.current_level.goal) then
+  if(player.battery <= 0) then
     add(st_game, {type = 'LEVEL_CLEAR', payload = game_state.current_level})
   end
 
-  
-  if(player.alive != true) then
-    add(st_game, {type = 'DEATH', payload = {}})
-  end
-
-
-
+  -- Process events
   god_does_things()
   abilities_do_things()
   for k, v in pairs(abilities) do
@@ -225,40 +263,12 @@ function drw_game()
   map(0,0,map_x,0,16,16)
   map(0,0,map_x+128,0,16,16)
 
+  print("score: "..player.score, 36, 21, CLR_BLU)
+  print("distance: "..game_state.distance, 36, 28, CLR_GRY)
+  print("battery: "..player.battery, 36, 38, CLR_YLW)
+
   if(_debug) then
-    -- printh("debug mode")
-
-    -- Sprite /generator data
-    -- print("flcool: "..fl_gen.cooldown, 44, 0, 11)
-    -- print("flcmax: "..fl_gen.cooldown_max, 44, 6, 11)
-
-    -- Player stats
-    -- print("ab: ", 88, 6, 12)
-    -- print("alive: "..tostr(player.alive), 44, 18, 11)
-    -- print("p.vy: "..player.vel_y, 70, 0, CLR_RED)
-    -- print("ff: "..fastfall.state, 70, 15, CLR_GRN)
-    --print("gcd: "..global_cooldown, 36, 6, 11)
-   
-    -- Game state (score, level, etc)
-    print("score: "..player.score, 36, 21, CLR_BLU)
-    -- print("l: "..game_state.current_level.num.." g:"..game_state.current_level.goal, 0, 21, CLR_GRN)
-    -- print("jumpst: "..jump.state, 0, 28, CLR_GRN)
-    -- print("m:km "..game_state.distance.meters..":"..game_state.distance.kilometers, 44, 6, CLR_GRN)
-
-    -- Abilities
-    local nexty = 0
-    local ab_msgs = {
-      tostr(abilities.jump.enabled)..":j.e",
-      tostr(abilities.jump.state)..":j.s",
-      tostr(abilities.fastfall.state)..":f.s",
-      tostr(abilities.fastfall.enabled)..":f.e",
-      -- tostr(player.vel_y)..":p.vy",
-      -- tostr(player.y)..":p.y",
-    }
-    foreach(ab_msgs, function(s) 
-      print_rj(s, nexty, CLR_GRN)
-      nexty += 6
-      end)
+    -- use this for printing debug stuff to screen
   end
 
   foreach(game_state.entities, sprite_draw)
@@ -313,7 +323,8 @@ fl_gen = {
   target = game_state.entities,
   stacks = false,
   emit = function (ss)
-    local s = { x = 128, y = GROUND_Y, idx = 4, w=8, buff_w = 0, h=8, v=1, type = 'flower'}
+    local sp_num = flr(rnd(5)) + 17 -- 17 is current lowest sprite index
+    local s = { x = 128, y = GROUND_Y, idx = sp_num, w=8, buff_w = 0, h=8, v=1, type = 'flower'}
     add(ss, s)
     return ss
   end
@@ -354,14 +365,22 @@ function player_draw(p)
 end
 
 __gfx__
-00000000aaaaaaaa4444444440444044000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000aaa4aaaa4044404444440444002220000056600000566000088880000000000000000000000000000000000000000000000000000000000000000000
-00700700aaaaaaaaaaaaaaaaaaaaaaaa022a22000666660006666600888888000bb0000000000000000000000000000000000000000000000000000000000000
-00077000aaaaaaaaaaaaaaaaaaaaa4aa00222000665585866655858688898800babbb00000000000000000000000000000000000000000000000000000000000
-00077000aaaaaaaa4aaaaaaaaaaaaaaa00080000066666600666666088999800aaabbbbb00000000000000000000000000000000000000000000000000000000
-00700700aaaaaaaaaaaaaaaaaaaaaaaa08888800050000505050050589999800aaabbbb000000000000000000000000000000000000000000000000000000000
-00000000a4aaaa4aaaaaaa4aaaaa4aaa00888000565005650600006009aa9000babbb00000000000000000000000000000000000000000000000000000000000
-00000000aaaaaaaaaaaaaaaaaaaaaaaa00080000050000505050050500aa00000bb0000000000000000000000000000000000000000000000000000000000000
+00000000aaaaaaaa4444444440444044800000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000aaa4aaaa4044404444440444880000880056600000566000088880000000000000000000000000000000000000000000000000000000000000000000
+00700700aaaaaaaaaaaaaaaaaaaaaaaa008008800666660006666600888888000bb0000000000000000000000000000000000000000000000000000000000000
+00077000aaaaaaaaaaaaaaaaaaaaa4aa00088800665585866655858688898800babbb00000000000000000000000000000000000000000000000000000000000
+00077000aaaaaaaa4aaaaaaaaaaaaaaa00088000066666600666666088999800aaabbbbb00000000000000000000000000000000000000000000000000000000
+00700700aaaaaaaaaaaaaaaaaaaaaaaa00808880050000505050050589999800aaabbbb000000000000000000000000000000000000000000000000000000000
+00000000a4aaaa4aaaaaaa4aaaaa4aaa08800080565005650600006009aa9000babbb00000000000000000000000000000000000000000000000000000000000
+00000000aaaaaaaaaaaaaaaaaaaaaaaa88000088050000505050050500aa00000bb0000000000000000000000000000000000000000000000000000000000000
+0000000000000000ccccc00000000e99000000000007dd0000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000002220000cc8c0000990e0990000000000ddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000022a220000c8c000099e00000000a00007ddd7dd00000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000222000000b0030000e0990000aa0000dd7ddd700000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000080000000bb3300000e99000aaaaa00000770000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000888880000000b000990e000baaa33ab0000770000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000088800000003300099e00000ba333b00007777000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000008000000bb3b000000e00000b33b000007dd7000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

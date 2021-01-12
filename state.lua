@@ -1,15 +1,15 @@
 game_state = {
-  distance = { meters = 0, kilometers = 0},
+  distance = 0,
+  half_distance = 0,
   global_cooldown = 0,
   lock_input = 0,
-  dist_thresh = 256,
   entities = {},
   current_level = {},
   current_level_idx = 1,
   levels = {
     {
       num = 0,
-      goal = 1,
+      goal = 5,
       enable_on_clear = 'fastfall'
     },
     {
