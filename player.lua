@@ -1,3 +1,16 @@
+player = {
+  battery = 100,
+  frame = 0,
+  half_frame = 0,
+  x = 24,
+  y = GROUND_Y,
+  w = 8,
+  h = 6,
+  vel_x = 0,
+  vel_y = 0,
+  score = 0,
+  base_sprite = 5
+}
 fastfall = {
   name = 'fastfall',
   msg = 'You got FASTFALL. Press down to drop to the ground.',
@@ -91,23 +104,33 @@ function player_does_things()
     end
     if(v.type == 'PLAYER_COLLISION') then
       if(v.payload.sprite.type == 'flower') then
-        player.score += 1
+        player.score += 3
       end
+    end
+    if(v.type == 'DAY_END_VICTORY') then
+      player.battery = battery_levels[v.payload + 1]
+      player.frame = 0
+      player.half_frame = 0
+      player.x = 24
+      player.y = GROUND_Y
+      player.vel_x = 0
+      player.vel_y = 0
+    end
+    if(v.type == 'DAY_END_DEFEAT') then
+      player.battery = 100 
+      player.frame = 0
+      player.half_frame = 0
+      player.x = 24
+      player.y = GROUND_Y
+      player.vel_x = 0
+      player.vel_y = 0
     end
   end
 end
 
 
-function init_player()
-    player.frame = 0
-    player.half_frame = 0
-    player.x = 24
-    player.y = GROUND_Y
-    player.battery = 100
+function reset_player()
     player.vel_x = 0
     player.vel_y = 0
-    player.w = 8
-    player.h = 6
     player.score = 0
-    player.base_sprite = 5
 end

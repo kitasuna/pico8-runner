@@ -3,12 +3,9 @@ version 29
 __lua__
 -- venusian botanist
 map_x = 0
-diff = {0, 0}
-GROUND_Y = 80 -- switch to this eventually
+GROUND_Y = 80
 scroll_speed = 1
 speed_mult = 1
-
-player = {}
 
 -- Event stream
 st_game = {}
@@ -19,12 +16,17 @@ world = {}
 #include const.lua
 #include player.lua
 #include state.lua
+
 scrn = {}
+
+function _init()
+  scrn.drw = drw_title
+  scrn.upd = upd_title
+end
 
 _debug = true
 
 #include helper.lua
-#include init.lua
 #include menus.lua
 
 function _update60()
@@ -50,11 +52,20 @@ function build_world()
   local current_max_distance = 0
 
   for i=1,#points_needed do
-    -- subtract 16 here to account for stuff that gets generated towards the end of the level
+    -- subtract 42 from distances here to account for stuff that gets generated towards the end of the level
     add(levels, build_day(points_needed[i], (distances[i] - 42), current_max_distance, 0))
     current_max_distance += distances[i]
   end
-  return levels
+
+  -- append all those tables together
+  local new_levels = {}
+  for i=1,len(levels) do
+    for j=1,len(levels[i]) do
+      add(new_levels, levels[i][j])
+    end
+  end
+
+  return new_levels
 end
 
 function build_day(how_many_points, maximum_distance, offset, buffer)
@@ -89,77 +100,30 @@ function god_does_things()
     if(v.type == 'DEATH') then
       drop_all(game_state.entities)
       game_state.lock_input = 20
-      scrn.upd = upd_lose
+      scrn.upd = upd_tween
       scrn.drw = drw_lose
     end
-    if(v.type == 'LEVEL_CLEAR') then
+    if(v.type == 'DAY_END_VICTORY') then
       drop_all(game_state.entities)
       game_state.lock_input = 20
-      abilities[v.payload.enable_on_clear].enabled = true
-      scrn.upd = upd_win
+      game_state.half_distance = 0
+      scrn.upd = upd_tween
       scrn.drw = drw_win
     end
-    if(v.type == 'LEVEL_NEXT') then
-      game_state.current_level = game_state.levels[v.payload] 
-
-      -- TODO maybe do this with an event...
-      init_player()
-
-      game_state.lock_input = 0
+    if(v.type == 'DAY_END_DEFEAT') then
+      drop_all(game_state.entities)
+      game_state.lock_input = 20
       game_state.distance = 0
       game_state.half_distance = 0
-      game_state.entities = drop_all_sprites(game_state.entities)
+      scrn.upd = upd_tween
+      scrn.drw = drw_lose
+    end
+    if(v.type == 'DAY_NEXT') then
+      game_state.current_day += 1
       scrn.drw = drw_game
       scrn.upd = upd_game
     end
   end
-end
-
-function gen_update(gen, gs)
-  if (gen.cooldown > 0) then
-    gen.cooldown -= 1
-  end
-
-  if(gs.global_cooldown > 0) then
-    return 
-  end
-
-  if(gen.cooldown <= 0) then
-      -- Add thing
-      gen.emit(gen.target)
-      
-      local buff = flr(gen.sprite_width / speed_mult) + 1 -- adding one for kicks
-      gs.global_cooldown = buff
-
-      -- Reset cooldown
-      local nxt = flr(rnd(gen.cooldown_max - gen.cooldown_min))
-
-      -- Max width of fires (consecutive sprites, in this case)
-      local max_width = 1
-
-      -- If this generator stacks
-      -- _and_
-      -- If we haven't hit max width yet
-      -- _and_
-      -- the RNG gave us a multiple of 3 (random factor)
-      if(gen.stacks == true and gen.last_width < (max_width - 1) and nxt % 3 == 0) then
-        gen.cooldown = buff -- sprite width / speed_mult
-        gen.last_width += 1
-      else
-        gen.last_width = 0
-        gen.cooldown = nxt + gen.cooldown_min
-      end
-  end
-
-  -- Adjusts cooldown boundaries based on level distance
-  if(gen.cooldown_max > gen.cooldown_min) then
-    gen.cooldown_max = gen.cooldown_max - (gs.distance / 10)
-    if(gen.cooldown_max < gen.cooldown_min) then
-      gen.cooldown_max = gen.cooldown_min
-    end
-  end
-
-  return
 end
 
 function upd_game()
@@ -189,20 +153,13 @@ function upd_game()
   -- Check entity collision
   foreach(game_state.entities, run_collision(game_state.entities, player))
   
-  -- Update global cooldown (spaces out sprites)
-  if(game_state.global_cooldown > 0) then game_state.global_cooldown -=1 end
-
   -- check current level to see if we need to fire a flower off
-  for f in all(world[game_state.current_level_idx]) do
+  for f in all(world) do
     if game_state.distance == f and game_state.half_distance == 0 then
       printh("flower in main game loop at: "..f)
       fl_gen.emit(game_state.entities)
     end
   end
-  -- Update the generators
-  -- gen_update(fl_gen, game_state)
-  -- gen_update(fire_gen, game_state)
-  -- gen_update(comet_gen, game_state)
 
   local abil
   if(btnp(BTN_A) and abilities.jump.enabled == true) then
@@ -226,8 +183,15 @@ function upd_game()
   end
 
   if(player.battery <= 0) then
-    add(st_game, {type = 'LEVEL_CLEAR', payload = game_state.current_level})
+    if player.score >= points_needed[game_state.current_day] then
+      add(st_game, { type = 'DAY_END_VICTORY', payload = game_state.current_day })
+    else
+      add(st_game, { type = 'DAY_END_DEFEAT', payload = nil })
+    end
   end
+
+  -- TODO: Also make this an event?
+  player.y += player.vel_y
 
   -- Process events
   god_does_things()
@@ -243,8 +207,6 @@ function upd_game()
   -- Reset message queue
   st_game = {}
 
-  -- TODO: Also make this an event?
-  player.y += player.vel_y
 end
 
 function proc_st_game()
@@ -263,9 +225,10 @@ function drw_game()
   map(0,0,map_x,0,16,16)
   map(0,0,map_x+128,0,16,16)
 
-  print("score: "..player.score, 36, 21, CLR_BLU)
-  print("distance: "..game_state.distance, 36, 28, CLR_GRY)
-  print("battery: "..player.battery, 36, 38, CLR_YLW)
+  print("score: "..player.score, 0, 0, CLR_BLU)
+  print("day: "..game_state.current_day, 64, 0, CLR_BLU)
+  print("distance: "..game_state.distance, 0, 8, CLR_GRY)
+  print("battery: "..player.battery, 0, 16, CLR_YLW)
 
   if(_debug) then
     -- use this for printing debug stuff to screen
@@ -320,8 +283,6 @@ fl_gen = {
   cooldown_max = 120,
   sprite_width = 8 + 4, -- extra wide buffer
   last_width = 0,
-  target = game_state.entities,
-  stacks = false,
   emit = function (ss)
     local sp_num = flr(rnd(5)) + 17 -- 17 is current lowest sprite index
     local s = { x = 128, y = GROUND_Y, idx = sp_num, w=8, buff_w = 0, h=8, v=1, type = 'flower'}
@@ -336,8 +297,6 @@ fire_gen = {
   cooldown_max = 90,
   sprite_width = 8,
   last_width = 0,
-  target = game_state.entities,
-  stacks = true,
   emit = function (ss)
     local s = { x = 128, y = GROUND_Y, idx = 7, w=8, buff_w = 0, h=6, v=1, type = 'fire'}
     add(ss, s)
@@ -351,8 +310,6 @@ comet_gen = {
   cooldown_max = 210,
   sprite_width = 8,
   last_width = 0,
-  target = game_state.entities,
-  stacks = false,
   emit = function(ss)
     local s = { x = 128, y = 58, idx = 8, w=6, buff_w=0, h=6, v=2, type = 'comet'}
     add(ss, s)

@@ -1,54 +1,38 @@
-function upd_win()
-  handle_level_tween()
-end
+function upd_tween()
+  if(game_state.lock_input > 0) then
+    game_state.lock_input -= 1
+  end
 
-function upd_lose()
-  handle_menu()
+  if(game_state.lock_input == 0) then
+    if(btnp(BTN_A) or btnp(BTN_B)) then 
+      add(st_game, { type = 'DAY_NEXT', payload = nil })
+    end
+  end
+
+  god_does_things()
+  st_game = {}
 end
 
 function upd_title()
-  handle_menu()
-end
-
-function handle_menu()
-  local lvl_len = len(game_state.levels)   
   if(game_state.lock_input == 0) then
-    if(btnp(BTN_A) or btnp(BTN_B)) then return init_game(game_state) end
-    if(btnp(BTN_D) and (game_state.current_level_idx > 1)) then game_state.current_level_idx -= 1 end
-    if(btnp(BTN_U) and (game_state.current_level_idx < lvl_len)) then game_state.current_level_idx += 1 end
+    if(btnp(BTN_A) or btnp(BTN_B)) then 
+      world = build_world()
+
+      for obj in all(world) do
+          printh("flower at: "..obj)
+      end
+
+      game_state.lock_input = 0
+      game_state.distance = 0
+      game_state.half_distance = 0
+      game_state.entities = drop_all_sprites(game_state.entities)
+      scrn.drw = drw_game
+      scrn.upd = upd_game
+    end
   end
   if(game_state.lock_input > 0) then
     game_state.lock_input -= 1
   end
-end
-
-function handle_level_tween()
-  local lvl_len = len(game_state.levels)   
-  if(game_state.lock_input == 0) then
-    -- TODO
-    --  change this next_level call to an event
-    --  make this  "current level" thing a local? can we persist it somehow? just
-    --    get it out of the game_state
-    --  Try to make sure only god function modifies game state so things don't get weird
-    if(btnp(BTN_A) or btnp(BTN_B)) then return next_level(game_state) end
-    if(btnp(BTN_D) and (game_state.current_level_idx > 1)) then game_state.current_level_idx -= 1 end
-    if(btnp(BTN_U) and (game_state.current_level_idx < lvl_len)) then game_state.current_level_idx += 1 end
-  end
-  if(game_state.lock_input > 0) then
-    game_state.lock_input -= 1
-  end
-end
-
-function handle_lose()
-  handle_menu()
-end
-
-function handle_win()
-  handle_menu()
-end
-
-function handle_title()
-  handle_menu()
 end
 
 function drw_title()
@@ -60,17 +44,15 @@ function drw_title()
   print("DON'T TOUCH THESE", 23, 36, CLR_RED)
   spr(4, 15, 22)
   spr(7, 15, 34)
-  -- print("lEVEL sELECT:"..game_state.current_level_idx, 23, 30, CLR_ORN)
 end
+
 function drw_lose()
   cls()
   print("YOU LOOOOOOOOOOOOOOOOSE", 0, 0, CLR_RED)
-  print("NEXT LEVEL:"..game_state.current_level_idx, 23, 30, CLR_ORN)
 end
 
 function drw_win()
   cls()
   print("VICTOLY", 0, 0, CLR_GRN)
-  print("NEXT LEVEL:"..game_state.current_level_idx, 23, 30, CLR_ORN)
 end
 
