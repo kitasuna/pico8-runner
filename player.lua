@@ -50,6 +50,7 @@ jump = {
     local v0 = -3.8
 
     if(jump.state == 1) then
+      sfx(0)
       add(st_game, { type = 'PLAYER_VEL_Y', payload = v0})
       jump.state += 1
     elseif(jump.state >= 2 and plr.y >= GROUND_Y) then
@@ -105,6 +106,7 @@ function player_does_things()
     if(v.type == 'PLAYER_COLLISION') then
       if(v.payload.sprite.type == 'flower') then
         player.score += 3
+        sfx(1)
       end
     end
     if(v.type == 'DAY_END_VICTORY') then
