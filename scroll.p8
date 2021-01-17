@@ -2,8 +2,18 @@ pico-8 cartridge // http://www.pico-8.com
 version 29
 __lua__
 -- venusian botanist
+
+-- map's current x-coordinate, not constant
 map_x = 0
+
+-- y coord of ground
 GROUND_Y = 80
+
+-- how many points per flower
+POINTS_PER_FLOWER = 3
+-- how much damage a comet causes
+DAMAGE_PER_COMET = 10
+
 scroll_speed = 1
 speed_mult = 1
 
@@ -18,8 +28,21 @@ world = {}
 #include state.lua
 
 scrn = {}
+points_needed = {}
+distances = {}
+battery_levels = {}
 
 function _init()
+  -- points needed to get a battery upgrade
+  -- we can generate this later when we get things sorted
+  points_needed = { (POINTS_PER_FLOWER * 5), (POINTS_PER_FLOWER * 10) }
+
+  -- how far we want the player to be able to travel
+  -- should be aggregate distances, so distances[i] <= distances[i+1]
+  distances = { 400 , 1000 }
+
+  -- distance[i] / 4
+  battery_levels = { 100, 150 }
   scrn.drw = drw_title
   scrn.upd = upd_title
 end
@@ -37,47 +60,86 @@ function _draw()
   scrn.drw()
 end
 
-flower_points = 3
--- points needed to get a battery upgrade
-points_needed = { (flower_points * 5), (flower_points * 10) }
--- we can generate this later when we get things sorted
-total_score = flower_points * 15
--- how far we want the player to be able to travel
-distances = { 400 , 600 }
--- distance[i] / 4
-battery_levels = { 100, 150 }
 
 function build_world()
-  local levels = {}
+  local tmp = {}
   local current_max_distance = 0
 
   for i=1,#points_needed do
     -- subtract 42 from distances here to account for stuff that gets generated towards the end of the level
-    add(levels, build_day(points_needed[i], (distances[i] - 42), current_max_distance, 0))
+    add(tmp, add_flowers(points_needed[i], current_max_distance, (distances[i] - 42), 0))
     current_max_distance += distances[i]
   end
 
   -- append all those tables together
-  local new_levels = {}
-  for i=1,len(levels) do
-    for j=1,len(levels[i]) do
-      add(new_levels, levels[i][j])
+  -- TODO: Optimization: sort this so we can use it more efficiently later
+  local flowers = {}
+  for i=1,len(tmp) do
+    for j=1,len(tmp[i]) do
+      add(flowers, tmp[i][j])
     end
   end
 
-  return new_levels
+  tmp = {}
+  current_max_distance = 0
+  for i=1,#points_needed do
+    -- subtract 42 from distances here to account for stuff that gets generated towards the end of the level
+    add(tmp, add_obstacles(0.05 / i * 2, current_max_distance, (distances[i] - 42)))
+    current_max_distance += distances[i]
+  end
+
+  -- append all those tables together
+  local obstacles = {}
+  for i=1,len(tmp) do
+    for j=1,len(tmp[i]) do
+      add(obstacles, tmp[i][j])
+    end
+  end
+
+
+  return {
+    flowers=flowers,
+    obstacles=obstacles
+  }
 end
 
-function build_day(how_many_points, maximum_distance, offset, buffer)
+function add_obstacles(freq, min_distance, max_distance)
+  local range = max_distance - min_distance
+  local base = flr(range * freq)
+  local high_end = flr(base * 1.5)
+  local low_end = flr(base * 0.5)
+  printh("base: "..base)
+  printh("low_end: "..low_end)
+  printh("high_end: "..high_end)
+  local obstacles = {}
+  local current_distance = min_distance
+  -- while #obstacles < 8 do
+  while current_distance < max_distance do
+    printh("current_distance: "..current_distance)
+    local interval = low_end + flr(rnd(high_end - low_end))
+    local next_obstacle = interval + current_distance
+    local heights = {76, 76, 76, 62, 48}
+    local velocities = {2, 2, 4, 4, 8}
+    local height_idx = flr(rnd(#heights)) + 1
+    add(obstacles, { x = next_obstacle, y = heights[height_idx], v = 2})
+    current_distance += interval
+  end
+
+  return obstacles
+end
+
+function add_flowers(how_many_points, minimum_distance, maximum_distance, buffer)
   local flowers = {}
   local points_so_far = 0
-
+  printh("hmp: "..how_many_points)
+  printh("min dist: "..minimum_distance)
+  printh("max dist: "..maximum_distance)
   while points_so_far <= how_many_points do
      -- randomly pick an x position
-     local my_x = flr(rnd(maximum_distance + buffer - offset)) + offset
+     local my_x = flr(rnd(maximum_distance + buffer - minimum_distance)) + minimum_distance
      -- check to make sure it's not already in the sequence
      if (val_in_seq(flowers, my_x, 4) == false) then
-       points_so_far += flower_points
+       points_so_far += POINTS_PER_FLOWER
        add(flowers, my_x)
      end
   end
@@ -123,6 +185,10 @@ function god_does_things()
       scrn.drw = drw_game
       scrn.upd = upd_game
     end
+    if(v.type == 'GAME_CLEAR') then
+      scrn.drw = drw_clear
+      scrn.upd = upd_clear
+    end
   end
 end
 
@@ -154,10 +220,18 @@ function upd_game()
   foreach(game_state.entities, run_collision(game_state.entities, player))
   
   -- check current level to see if we need to fire a flower off
-  for f in all(world) do
+  for f in all(world.flowers) do
     if game_state.distance == f and game_state.half_distance == 0 then
       printh("flower in main game loop at: "..f)
       fl_gen.emit(game_state.entities)
+    end
+  end
+
+  -- check current level to see if we need to add an obstacle
+  for f in all(world.obstacles) do
+    if game_state.distance == f.x and game_state.half_distance == 0 then
+      printh("obstacle in main game loop at: x:"..f.x..", y:"..f.y)
+      comet_gen.emit(game_state.entities, f.v, f.y)
     end
   end
 
@@ -183,8 +257,10 @@ function upd_game()
   end
 
   if(player.battery <= 0) then
-    if player.score >= points_needed[game_state.current_day] then
-      add(st_game, { type = 'DAY_END_VICTORY', payload = game_state.current_day })
+    if player.level + 1 <= #points_needed and player.score >= points_needed[player.level] then
+      add(st_game, { type = 'DAY_END_VICTORY', payload = nil })
+    elseif player.score >= points_needed[player.level] then
+      add(st_game, { type = 'GAME_CLEAR', payload = nil })
     else
       add(st_game, { type = 'DAY_END_DEFEAT', payload = nil })
     end
@@ -242,6 +318,9 @@ end
 
 function shift_sprite(s)
   s.x -= s.v * speed_mult 
+  if s.dv != nil then
+    s.v += s.dv
+  end
 end
 
 function drop_offscreen(ss)
@@ -284,7 +363,7 @@ fl_gen = {
   sprite_width = 8 + 4, -- extra wide buffer
   last_width = 0,
   emit = function (ss)
-    local sp_num = flr(rnd(5)) + 17 -- 17 is current lowest sprite index
+    local sp_num = 17 -- 17 is current lowest sprite index
     local s = { x = 128, y = GROUND_Y, idx = sp_num, w=8, buff_w = 0, h=8, v=1, type = 'flower'}
     add(ss, s)
     return ss
@@ -305,13 +384,10 @@ fire_gen = {
 }
 
 comet_gen = {
-  cooldown = 150,
-  cooldown_min = 120,
-  cooldown_max = 210,
   sprite_width = 8,
   last_width = 0,
-  emit = function(ss)
-    local s = { x = 128, y = 58, idx = 8, w=6, buff_w=0, h=6, v=2, type = 'comet'}
+  emit = function(ss, v, y)
+    local s = { x = 128, y = y, idx = 8, w=6, buff_w=0, h=6, v=v, dv=0.05, type = 'comet'}
     add(ss, s)
     return ss
   end
@@ -358,3 +434,4 @@ __map__
 __sfx__
 000100000404006040080400b0400d0400f040100401204013040150401604018040190401a0401c0401d0401f04021040230402404026040280402b0402d0302f030310303302035020380203a0203d0103e010
 000100000c5500e55010550125501355014550155501655016550175501755017550175501655012550105500c5500b5500a5500a5500a5500a5500a5500a5500b5500c5500d5500f5501355016550185501a550
+000200002d6502b650296502665023650206501d6501a650186401664014640136401264011630106300d6300c6300b6300a63009620086200762006620056100461003610026000260001600006000060001600

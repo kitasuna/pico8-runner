@@ -18,8 +18,12 @@ function upd_title()
     if(btnp(BTN_A) or btnp(BTN_B)) then 
       world = build_world()
 
-      for obj in all(world) do
-          printh("flower at: "..obj)
+      for obj in all(world.flowers) do
+        printh("flower at: "..obj)
+      end
+
+      for obj in all(world.obstacles) do
+        printh("obstacle at: x: "..obj.x..", y: "..obj.y)
       end
 
       game_state.lock_input = 0
@@ -56,3 +60,23 @@ function drw_win()
   print("VICTOLY", 0, 0, CLR_GRN)
 end
 
+function drw_clear()
+  cls()
+  print("SUPER VICTOLY", 60, 32, CLR_GRN)
+end
+
+
+function upd_clear()
+  if(game_state.lock_input > 0) then
+    game_state.lock_input -= 1
+  end
+
+  if(game_state.lock_input == 0) then
+    if(btnp(BTN_A) or btnp(BTN_B)) then 
+      -- add(st_game, { type = 'DAY_NEXT', payload = nil })
+    end
+  end
+
+  god_does_things()
+  st_game = {}
+end
