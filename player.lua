@@ -10,7 +10,8 @@ player = {
   vel_x = 0,
   vel_y = 0,
   score = 0,
-  base_sprite = 5
+  base_sprite = 5,
+  damage_frames = 0
 }
 fastfall = {
   name = 'fastfall',
@@ -111,6 +112,7 @@ function player_does_things()
       end
       if(v.payload.sprite.type == 'comet') then
         player.battery -= DAMAGE_PER_COMET
+        player.damage_frames = 30
         sfx(2)
       end
     end
