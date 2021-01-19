@@ -13,6 +13,25 @@ function upd_tween()
   st_game = {}
 end
 
+function upd_lvlup()
+  if(game_state.lock_input > 0) then
+    game_state.lock_input -= 1
+  end
+
+  if player.display_battery < player.battery then
+    player.display_battery += 1
+  end
+
+  if(game_state.lock_input == 0) then
+    if(btnp(BTN_A) or btnp(BTN_B)) then 
+      add(st_game, { type = 'DAY_NEXT', payload = nil })
+    end
+  end
+
+  god_does_things()
+  st_game = {}
+end
+
 function upd_title()
   if(game_state.lock_input == 0) then
     if(btnp(BTN_A) or btnp(BTN_B)) then 

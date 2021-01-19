@@ -1,5 +1,6 @@
 player = {
   battery = 100,
+  display_battery = 100,
   level = 1,
   frame = 0,
   half_frame = 0,
@@ -104,6 +105,7 @@ function player_does_things()
     end
     if(v.type == 'PLAYER_BATTERY_DOWN') then
       player.battery -= v.payload
+      player.display_battery = player.battery
     end
     if(v.type == 'PLAYER_COLLISION') then
       if(v.payload.sprite.type == 'flower') then
@@ -112,6 +114,7 @@ function player_does_things()
       end
       if(v.payload.sprite.type == 'comet') then
         player.battery -= DAMAGE_PER_COMET
+        player.display_battery = player.battery
         player.damage_frames = 30
         sfx(2)
       end
@@ -121,12 +124,6 @@ function player_does_things()
       if player.level <= #battery_levels then
         player.battery = battery_levels[player.level]
       end
-      player.frame = 0
-      player.half_frame = 0
-      player.x = 24
-      player.y = GROUND_Y
-      player.vel_x = 0
-      player.vel_y = 0
     end
     if(v.type == 'DAY_END_DEFEAT') then
       player.battery = 100 

@@ -166,11 +166,11 @@ function god_does_things()
       scrn.drw = drw_lose
     end
     if(v.type == 'DAY_END_VICTORY') then
-      drop_all(game_state.entities)
+      -- drop_all(game_state.entities)
       game_state.lock_input = 20
       game_state.half_distance = 0
-      scrn.upd = upd_tween
-      scrn.drw = drw_win
+      scrn.upd = upd_lvlup
+      scrn.drw = drw_lvlup
     end
     if(v.type == 'DAY_END_DEFEAT') then
       drop_all(game_state.entities)
@@ -266,7 +266,9 @@ function upd_game()
     end
   end
 
-  -- TODO: Also make these an event?
+  -- TODO: Think of a better way to handle these player mods,
+  -- not in this function... ideally player should manage
+  -- its own state
   player.y += player.vel_y
   if player.damage_frames > 0 and player.damage_frames % 2 == 0 then
     player.damage_frames -= 1
@@ -277,7 +279,6 @@ function upd_game()
   else
     pal()
   end
-
 
   -- Process events
   god_does_things()
@@ -314,13 +315,29 @@ function drw_game()
   print("score: "..player.score, 0, 0, CLR_BLU)
   print("day: "..game_state.current_day, 64, 0, CLR_BLU)
   print("distance: "..game_state.distance, 0, 8, CLR_GRY)
-  print("battery: "..player.battery, 0, 16, CLR_YLW)
+  print("battery: "..player.display_battery, 0, 16, CLR_YLW)
 
   if(_debug) then
     -- use this for printing debug stuff to screen
   end
 
   foreach(game_state.entities, sprite_draw)
+
+  player_draw(player)
+end
+
+function drw_lvlup()
+  cls(0)
+  map(0,0,map_x,0,16,16)
+  map(0,0,map_x+128,0,16,16)
+
+  print("score: "..player.score, 0, 0, CLR_BLU)
+  print("day: "..game_state.current_day, 64, 0, CLR_BLU)
+  print("distance: "..game_state.distance, 0, 8, CLR_GRY)
+  print("battery: "..player.display_battery, 0, 16, CLR_YLW)
+
+  print("LEVEL UP!", 58, 58, CLR_GRN)
+  -- foreach(game_state.entities, sprite_draw)
 
   player_draw(player)
 end
