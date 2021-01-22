@@ -67,7 +67,17 @@ function build_world()
 
   for i=1,#points_needed do
     -- subtract 42 from distances here to account for stuff that gets generated towards the end of the level
-    add(tmp, add_flowers(points_needed[i], current_max_distance, (distances[i] - 42), 0))
+    local level = add_flowers(points_needed[i], current_max_distance, (distances[i] - 42), 0)
+    printh("...lvl...")
+    for k, v in pairs(level) do
+      printh("k: "..k..", v: "..v)
+    end
+    local sorted_level = qsort(level)
+    printh("...sorted lvl...")
+    for k, v in pairs(sorted_level) do
+      printh("k: "..k..", v: "..v)
+    end
+    add(tmp, sorted_level)
     current_max_distance += distances[i]
   end
 
@@ -108,14 +118,9 @@ function add_obstacles(freq, min_distance, max_distance)
   local base = flr(range * freq)
   local high_end = flr(base * 1.5)
   local low_end = flr(base * 0.5)
-  printh("base: "..base)
-  printh("low_end: "..low_end)
-  printh("high_end: "..high_end)
   local obstacles = {}
   local current_distance = min_distance
-  -- while #obstacles < 8 do
   while current_distance < max_distance do
-    printh("current_distance: "..current_distance)
     local interval = low_end + flr(rnd(high_end - low_end))
     local next_obstacle = interval + current_distance
     local heights = {76, 76, 76, 62, 48}
@@ -149,7 +154,7 @@ end
 
 function debugger_does_things()
   for k, v in pairs(st_game) do
-    printh("GOT EVENT: "..v.type)
+    -- printh("GOT EVENT: "..v.type)
   end
 end
 

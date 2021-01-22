@@ -1,10 +1,64 @@
 function len(xs)
   local count = 0
-  -- foreach(t, function(s) count += 1 end)
   for k, v in pairs(xs) do
     count += 1
   end
   return count
+end
+
+--[[
+-- seq - the sequence to slice
+-- s - the starting index (inclusive)
+-- e - the ending index (exclusive)
+--]]
+function slice(seq, s, e)
+  if e > s then
+    return {}
+  end
+
+  local tmp = {}
+  for i = s,e do
+    add(tmp, seq[i])
+  end
+
+  return tmp
+end
+
+
+function concat(seq1, seq2)
+  for v in all(seq2) do
+    add(seq1, v)
+  end
+
+  return seq1
+end
+
+function qsort(seq)
+  if #seq == 0 or #seq == 1 then
+    return seq
+  end
+
+  local pivot = seq[flr(len(seq) / 2)]
+  local left = {}
+  local right = {}
+  del(seq, pivot)
+
+  for v in all(seq) do
+    if v <= pivot then
+      add(left, v)
+    else
+      add(right, v)
+    end
+  end
+
+  local left_sorted = qsort(left)
+  -- add pivot
+  add(left_sorted, pivot)
+
+  local right_sorted = qsort(right)
+
+  local combined = concat(left_sorted, right_sorted)
+  return combined
 end
 
 function val_in_seq(seq, val, buffer)
