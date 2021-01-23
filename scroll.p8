@@ -25,7 +25,13 @@ world = {}
 
 #include const.lua
 #include player.lua
-#include state.lua
+
+game_state = {
+  distance = 0,
+  half_distance = 0,
+  lock_input = 0,
+  entities = {},
+}
 
 scrn = {}
 points_needed = {}
@@ -143,7 +149,7 @@ function add_flowers(how_many_points, minimum_distance, maximum_distance, buffer
      -- randomly pick an x position
      local my_x = flr(rnd(maximum_distance + buffer - minimum_distance)) + minimum_distance
      -- check to make sure it's not already in the sequence
-     if (val_in_seq(flowers, my_x, 4) == false) then
+     if (val_in_seq(flowers, my_x, 20) == false) then
        points_so_far += POINTS_PER_FLOWER
        add(flowers, my_x)
      end
@@ -160,18 +166,11 @@ end
 
 function god_does_things()
   for k, v in pairs(st_game) do
-    if(v.type == "PLAYER_COLLISION") then
+    if(v.type == 'PLAYER_COLLISION') then
       -- TODO handle game logic based on entity type
       del(game_state.entities, v.payload.sprite)
     end
-    if(v.type == 'DEATH') then
-      drop_all(game_state.entities)
-      game_state.lock_input = 20
-      scrn.upd = upd_tween
-      scrn.drw = drw_lose
-    end
-    if(v.type == 'DAY_END_VICTORY') then
-      -- drop_all(game_state.entities)
+    if(v.type == 'LEVEL_UP') then
       game_state.lock_input = 20
       game_state.half_distance = 0
       scrn.upd = upd_lvlup
@@ -182,11 +181,10 @@ function god_does_things()
       game_state.lock_input = 20
       game_state.distance = 0
       game_state.half_distance = 0
-      scrn.upd = upd_tween
+      scrn.upd = upd_lose
       scrn.drw = drw_lose
     end
-    if(v.type == 'DAY_NEXT') then
-      game_state.current_day += 1
+    if(v.type == 'CONTINUE_AFTER_LEVEL_UP') then
       scrn.drw = drw_game
       scrn.upd = upd_game
     end
@@ -261,14 +259,15 @@ function upd_game()
     end
   end
 
+  -- if we have enough points AND this isn't the last level
+  if player.score >= points_needed[player.level] and player.level + 1 <= #points_needed then
+    add(st_game, { type = 'LEVEL_UP', payload = nil })
+  elseif player.score >= points_needed[player.level] then
+    add(st_game, { type = 'GAME_CLEAR', payload = nil })
+  end
+
   if(player.battery <= 0) then
-    if player.level + 1 <= #points_needed and player.score >= points_needed[player.level] then
-      add(st_game, { type = 'DAY_END_VICTORY', payload = nil })
-    elseif player.score >= points_needed[player.level] then
-      add(st_game, { type = 'GAME_CLEAR', payload = nil })
-    else
-      add(st_game, { type = 'DAY_END_DEFEAT', payload = nil })
-    end
+    add(st_game, { type = 'DAY_END_DEFEAT', payload = nil })
   end
 
   -- TODO: Think of a better way to handle these player mods,
@@ -301,24 +300,12 @@ function upd_game()
 
 end
 
-function proc_st_game()
-  for k, v in pairs(st_game) do
-      if(v.type == 'DEATH') then
-        drop_all(game_state.entities)
-        game_state.lock_input = 20
-        scrn.upd = upd_lose
-        scrn.drw = drw_lose
-      end
-  end
-end
-
 function drw_game()
   cls(0)
   map(0,0,map_x,0,16,16)
   map(0,0,map_x+128,0,16,16)
 
   print("score: "..player.score, 0, 0, CLR_BLU)
-  print("day: "..game_state.current_day, 64, 0, CLR_BLU)
   print("distance: "..game_state.distance, 0, 8, CLR_GRY)
   print("battery: "..player.display_battery, 0, 16, CLR_YLW)
 
@@ -337,7 +324,6 @@ function drw_lvlup()
   map(0,0,map_x+128,0,16,16)
 
   print("score: "..player.score, 0, 0, CLR_BLU)
-  print("day: "..game_state.current_day, 64, 0, CLR_BLU)
   print("distance: "..game_state.distance, 0, 8, CLR_GRY)
   print("battery: "..player.display_battery, 0, 16, CLR_YLW)
 

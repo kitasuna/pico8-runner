@@ -119,27 +119,28 @@ function player_does_things()
         sfx(2)
       end
     end
-    if(v.type == 'DAY_END_VICTORY') then
+    if(v.type == 'LEVEL_UP') then
       player.level += 1
       if player.level <= #battery_levels then
-        player.battery = battery_levels[player.level]
+        player.battery += battery_levels[player.level]
       end
     end
     if(v.type == 'DAY_END_DEFEAT') then
-      player.battery = 100 
-      player.frame = 0
-      player.half_frame = 0
-      player.x = 24
-      player.y = GROUND_Y
-      player.vel_x = 0
-      player.vel_y = 0
+      reset_player()
     end
   end
 end
 
 
 function reset_player()
-    player.vel_x = 0
-    player.vel_y = 0
-    player.score = 0
+  player.score = 0
+  player.battery = 100 
+  player.display_battery = 100 
+  player.frame = 0
+  player.half_frame = 0
+  player.x = 24
+  player.y = GROUND_Y
+  player.vel_x = 0
+  player.vel_y = 0
+  player.damage_frames = 0
 end

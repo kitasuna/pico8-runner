@@ -1,30 +1,15 @@
-function upd_tween()
-  if(game_state.lock_input > 0) then
-    game_state.lock_input -= 1
-  end
-
-  if(game_state.lock_input == 0) then
-    if(btnp(BTN_A) or btnp(BTN_B)) then 
-      add(st_game, { type = 'DAY_NEXT', payload = nil })
-    end
-  end
-
-  god_does_things()
-  st_game = {}
-end
-
 function upd_lvlup()
   if(game_state.lock_input > 0) then
     game_state.lock_input -= 1
   end
 
   if player.display_battery < player.battery then
-    player.display_battery += 1
+    player.display_battery += 3
   end
 
   if(game_state.lock_input == 0) then
     if(btnp(BTN_A) or btnp(BTN_B)) then 
-      add(st_game, { type = 'DAY_NEXT', payload = nil })
+      add(st_game, { type = 'CONTINUE_AFTER_LEVEL_UP', payload = nil })
     end
   end
 
@@ -51,6 +36,19 @@ function upd_title()
       game_state.entities = drop_all_sprites(game_state.entities)
       scrn.drw = drw_game
       scrn.upd = upd_game
+    end
+  end
+  if(game_state.lock_input > 0) then
+    game_state.lock_input -= 1
+  end
+end
+
+
+function upd_lose()
+  if(game_state.lock_input == 0) then
+    if(btnp(BTN_A) or btnp(BTN_B)) then 
+      scrn.drw = drw_title
+      scrn.upd = upd_title
     end
   end
   if(game_state.lock_input > 0) then
@@ -92,7 +90,6 @@ function upd_clear()
 
   if(game_state.lock_input == 0) then
     if(btnp(BTN_A) or btnp(BTN_B)) then 
-      -- add(st_game, { type = 'DAY_NEXT', payload = nil })
     end
   end
 
