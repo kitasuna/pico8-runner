@@ -37,18 +37,22 @@ scrn = {}
 points_needed = {}
 distances = {}
 battery_levels = {}
+max_battery = 0
 
 function _init()
+  -- TODO Calculate some of these values, given the generation algo + buffer between items etc
+
   -- points needed to get a battery upgrade
   -- we can generate this later when we get things sorted
-  points_needed = { (POINTS_PER_FLOWER * 5), (POINTS_PER_FLOWER * 10) }
+  points_needed = { (POINTS_PER_FLOWER * 5), (POINTS_PER_FLOWER * 10), (POINTS_PER_FLOWER * 15) }
 
   -- how far we want the player to be able to travel
   -- should be aggregate distances, so distances[i] <= distances[i+1]
-  distances = { 400 , 1000 }
+  distances = { 400, 1000, 2000 }
 
-  -- distance[i] / 4
-  battery_levels = { 100, 150 }
+  -- distance[i] - distance[i - 1] / 4
+  battery_levels = { 100, 150, 250 }
+  max_battery = battery_levels[#battery_levels - 1] + battery_levels[#battery_levels - 2]
   scrn.drw = drw_title
   scrn.upd = upd_title
 end
@@ -74,12 +78,8 @@ function build_world()
   for i=1,#points_needed do
     -- subtract 42 from distances here to account for stuff that gets generated towards the end of the level
     local level = add_flowers(points_needed[i], current_max_distance, (distances[i] - 42), 0)
-    printh("...lvl...")
-    for k, v in pairs(level) do
-      printh("k: "..k..", v: "..v)
-    end
     local sorted_level = qsort(level)
-    printh("...sorted lvl...")
+    printh("...lvl "..i.."...")
     for k, v in pairs(sorted_level) do
       printh("k: "..k..", v: "..v)
     end
@@ -88,7 +88,6 @@ function build_world()
   end
 
   -- append all those tables together
-  -- TODO: Optimization: sort this so we can use it more efficiently later
   local flowers = {}
   for i=1,len(tmp) do
     for j=1,len(tmp[i]) do
@@ -307,7 +306,11 @@ function drw_game()
 
   print("score: "..player.score, 0, 0, CLR_BLU)
   print("distance: "..game_state.distance, 0, 8, CLR_GRY)
-  print("battery: "..player.display_battery, 0, 16, CLR_YLW)
+
+  -- spr(9, 0, 16)
+  print(player.display_battery, 68, 16, CLR_YLW)
+  rect(8,16,64,20,CLR_WHT)
+  rectfill(10,18,10 + 48 * (player.display_battery / max_battery),18,CLR_YLW)
 
   if(_debug) then
     -- use this for printing debug stuff to screen
@@ -325,10 +328,11 @@ function drw_lvlup()
 
   print("score: "..player.score, 0, 0, CLR_BLU)
   print("distance: "..game_state.distance, 0, 8, CLR_GRY)
-  print("battery: "..player.display_battery, 0, 16, CLR_YLW)
+  print(player.display_battery, 68, 16, CLR_YLW)
+  rect(0,16,64,20,CLR_WHT)
+  rectfill(2,18,48 * (player.display_battery / max_battery),18,CLR_YLW)
 
   print("LEVEL UP!", 58, 58, CLR_GRN)
-  -- foreach(game_state.entities, sprite_draw)
 
   player_draw(player)
 end
@@ -371,29 +375,61 @@ function run_collision(ss, playerS)
 end
 
 function sprite_draw(s)
-  spr(s.idx, s.x, s.y)
+  spr(s.base_sprite + s.frame, s.x, s.y)
+  s.half_frame += 1
+  if s.half_frame > s.max_half_frame then
+    s.half_frame = 0
+    if(s.frame + 1 < s.frames) then
+      s.frame += 1
+    else
+      s.frame = 0 
+    end
+  end
 end
 
 fl_gen = {
-  cooldown = 120,
-  cooldown_min = 60,
-  cooldown_max = 120,
-  sprite_width = 8 + 4, -- extra wide buffer
-  last_width = 0,
   emit = function (ss)
-    local sp_num = 17 -- 17 is current lowest sprite index
-    local s = { x = 128, y = GROUND_Y, idx = sp_num, w=8, buff_w = 0, h=8, v=1, type = 'flower'}
-    add(ss, s)
+    -- do a semi-random check
+    -- add either flower or pollen
+    if rnd() >= 0.2 then
+      local s = {
+        x = 128,
+        y = GROUND_Y,
+        base_sprite = 17,
+        frames = 1,
+        frame = 0,
+        half_frame = 0,
+        max_half_frame = 0,
+        w = 8,
+        buff_w = 0,
+        h = 8,
+        v = 1, 
+        type = 'flower'
+      }
+      add(ss, s)
+    else
+      local s = {
+        x = 128,
+        y = GROUND_Y - 32,
+        base_sprite = 22,
+        frames = 3,
+        frame = 0,
+        half_frame = 0,
+        max_half_frame = 10,
+        w = 8,
+        buff_w = 0,
+        h = 8,
+        v = 0.5,
+        type = 'flower'
+      }
+      add(ss, s)
+
+    end
     return ss
   end
 }
 
 fire_gen = {
-  cooldown = 90,
-  cooldown_min = 30,
-  cooldown_max = 90,
-  sprite_width = 8,
-  last_width = 0,
   emit = function (ss)
     local s = { x = 128, y = GROUND_Y, idx = 7, w=8, buff_w = 0, h=6, v=1, type = 'fire'}
     add(ss, s)
@@ -402,10 +438,8 @@ fire_gen = {
 }
 
 comet_gen = {
-  sprite_width = 8,
-  last_width = 0,
   emit = function(ss, v, y)
-    local s = { x = 128, y = y, idx = 8, w=6, buff_w=0, h=6, v=v, dv=0.05, type = 'comet'}
+    local s = { x = 128, y = y, base_sprite = 8, frames = 1, frame = 0, half_frame = 0, max_half_frame = 0, w=6, buff_w=0, h=6, v=v, dv=0.05, type = 'comet'}
     add(ss, s)
     sfx(3)
     return ss
@@ -417,22 +451,22 @@ function player_draw(p)
 end
 
 __gfx__
-00000000aaaaaaaa4444444440444044800000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000aaa4aaaa4044404444440444880000880056600000566000088880000000000000000000000000000000000000000000000000000000000000000000
-00700700aaaaaaaaaaaaaaaaaaaaaaaa008008800666660006666600888888000bb0000000000000000000000000000000000000000000000000000000000000
-00077000aaaaaaaaaaaaaaaaaaaaa4aa00088800665585866655858688898800babbb00000000000000000000000000000000000000000000000000000000000
-00077000aaaaaaaa4aaaaaaaaaaaaaaa00088000066666600666666088999800aaabbbbb00000000000000000000000000000000000000000000000000000000
-00700700aaaaaaaaaaaaaaaaaaaaaaaa00808880050000505050050589999800aaabbbb000000000000000000000000000000000000000000000000000000000
+00000000aaaaaaaa444444444044404480000008000000000000000000000000000000000006000000000000000aaa0000000000000000000000000000000000
+00000000aaa4aaaa40444044444404448800008800566000005660000888800000000000006560000000000000aaa00000000000000000000000000000000000
+00700700aaaaaaaaaaaaaaaaaaaaaaaa008008800666660006666600888888000bb00000006b6000000000000aaaaa0000000000000000000000000000000000
+00077000aaaaaaaaaaaaaaaaaaaaa4aa00088800665585866655858688898800babbb000006b600000000000000aa00000000000000000000000000000000000
+00077000aaaaaaaa4aaaaaaaaaaaaaaa00088000066666600666666088999800aaabbbbb0065600000000000000a000000000000000000000000000000000000
+00700700aaaaaaaaaaaaaaaaaaaaaaaa00808880050000505050050589999800aaabbbb0006660000000000000a0000000000000000000000000000000000000
 00000000a4aaaa4aaaaaaa4aaaaa4aaa08800080565005650600006009aa9000babbb00000000000000000000000000000000000000000000000000000000000
 00000000aaaaaaaaaaaaaaaaaaaaaaaa88000088050000505050050500aa00000bb0000000000000000000000000000000000000000000000000000000000000
 0000000000000000ccccc00000000e99000000000007dd0000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000002220000cc8c0000990e0990000000000ddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000022a220000c8c000099e00000000a00007ddd7dd00000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000000000222000000b0030000e0990000aa0000dd7ddd700000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000000000080000000bb3300000e99000aaaaa00000770000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000888880000000b000990e000baaa33ab0000770000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000088800000003300099e00000ba333b00007777000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000008000000bb3b000000e00000b33b000007dd7000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000002220000cc8c0000990e0990000000000ddddd000000c00000800000000080000000000000000000000000000000000000000000000000000000000
+00000000022a220000c8c000099e00000000a00007ddd7dd00800000c000000c0c08000000000000000000000000000000000000000000000000000000000000
+0000000000222000000b0030000e0990000aa0000dd7ddd7000000000000000000000c0000000000000000000000000000000000000000000000000000000000
+0000000000080000000bb3300000e99000aaaaa000007700008000800000000c00c0000000000000000000000000000000000000000000000000000000000000
+000000000888880000000b000990e000baaa33ab000077000000c00000000000000080c000000000000000000000000000000000000000000000000000000000
+000000000088800000003300099e00000ba333b00007777000c00800800000000080000000000000000000000000000000000000000000000000000000000000
+000000000008000000bb3b000000e00000b33b000007dd700000000c008080c00000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
