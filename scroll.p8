@@ -238,8 +238,7 @@ function upd_game()
     end
   end
 
-  local abil
-  if(btnp(BTN_A) and abilities.jump.enabled == true) then
+  if(btnp(abilities.jump.fkey) and abilities.jump.enabled == true) then
     add(st_game, { type = 'ABILITY_FIRE', payload = abilities.jump.name})
   end
 

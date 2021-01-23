@@ -66,8 +66,8 @@ jump = {
     else
       if(plr.vel_y >= 2.5) then
         addlG = 0.4
-      elseif(btn(BTN_A) == false) then -- TODO: Can ref fkey above?
-        addlG = 0.4
+      elseif(btn(jump.fkey) == false) then -- TODO: Can ref fkey above?
+        addlG = 0.7
       end
 
       add(st_game, { type = 'PLAYER_VEL_Y', payload = plr.vel_y + (G * addlG) })
